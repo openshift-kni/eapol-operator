@@ -1,0 +1,24 @@
+# permissions for end users to edit authenticators.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: authenticator-editor-role
+rules:
+- apiGroups:
+  - eapol.eapol.openshift.io
+  resources:
+  - authenticators
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - eapol.eapol.openshift.io
+  resources:
+  - authenticators/status
+  verbs:
+  - get

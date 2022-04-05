@@ -1,0 +1,6 @@
+apiVersion: eapol.eapol.openshift.io/v1
+kind: Authenticator
+metadata:
+  name: authenticator-sample
+spec:
+  # TODO(user): Add fields here
