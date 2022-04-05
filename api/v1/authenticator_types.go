@@ -23,13 +23,54 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// AuthenticatorSpec defines the desired state of Authenticator
+// AuthenticatorSpec defines the desired state of a single authenticator instance
 type AuthenticatorSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of Authenticator. Edit authenticator_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	// Enabled controls whether this authenticator is enabled or disabled
+	// +kubebuilder:default=true
+	Enabled bool `json:"enabled"`
+
+	// Interfaces is the list of interfaces to protect under this authenticator instance
+	Interfaces []string `json:"interfaces"`
+
+	// Authentication configures back-end authentication for this authenticator
+	Authentication Auth `json:"authentication"`
+
+	// Configuration contains various low-level EAP tunable values
+	// +optional
+	Configuration *Config `json:"configuration,omitempty"`
+}
+
+// Auth represents back-end authentication configuration
+type Auth struct {
+	// LocalSecret configures the local internal authentication server based on the given secret
+	// +optional
+	LocalSecret string `json:"localSecret,omitempty"`
+
+	// Radius is the external RADIUS server configuration to use for authentication
+	// +optional
+	Radius *Radius `json:"radius,omitempty"`
+}
+
+// Radius represents a RADIUS server configuration
+type Radius struct {
+	// AuthServer is the IP address or hostname of the RADIUS authentication server
+	AuthServer string `json:"authServer"`
+
+	// AuthPort is the TCP Port of the RADIUS authentication server
+	AuthPort int `json:"authPort"`
+
+	// AuthSecret is the name of the Secret that contains the RADIUS authentication server shared secret
+	AuthSecret string `json:"authSecret"`
+}
+
+// Config represents miscelaneous 802.1x and EAP tunable values
+type Config struct {
+	// EapReauthPeriod is the EAP reauthentication period in seconds (default: 3600 seconds; 0 = disable)
+	// +kubebuilder:default=3600
+	EapReauthPeriod int `json:"eapReauthPeriod"`
 }
 
 // AuthenticatorStatus defines the observed state of Authenticator

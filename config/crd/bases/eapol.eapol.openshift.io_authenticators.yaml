@@ -1,0 +1,110 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.8.0
+  creationTimestamp: null
+  name: authenticators.eapol.eapol.openshift.io
+spec:
+  group: eapol.eapol.openshift.io
+  names:
+    kind: Authenticator
+    listKind: AuthenticatorList
+    plural: authenticators
+    singular: authenticator
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: Authenticator is the Schema for the authenticators API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AuthenticatorSpec defines the desired state of a single authenticator
+              instance
+            properties:
+              authentication:
+                description: Authentication configures back-end authentication for
+                  this authenticator
+                properties:
+                  localSecret:
+                    description: LocalSecret configures the local internal authentication
+                      server based on the given secret
+                    type: string
+                  radius:
+                    description: Radius is the external RADIUS server configuration
+                      to use for authentication
+                    properties:
+                      authPort:
+                        description: AuthPort is the TCP Port of the RADIUS authentication
+                          server
+                        type: integer
+                      authSecret:
+                        description: AuthSecret is the name of the Secret that contains
+                          the RADIUS authentication server shared secret
+                        type: string
+                      authServer:
+                        description: AuthServer is the IP address or hostname of the
+                          RADIUS authentication server
+                        type: string
+                    required:
+                    - authPort
+                    - authSecret
+                    - authServer
+                    type: object
+                type: object
+              configuration:
+                description: Configuration contains various low-level EAP tunable
+                  values
+                properties:
+                  eapReauthPeriod:
+                    default: 3600
+                    description: 'EapReauthPeriod is the EAP reauthentication period
+                      in seconds (default: 3600 seconds; 0 = disable)'
+                    type: integer
+                required:
+                - eapReauthPeriod
+                type: object
+              enabled:
+                default: true
+                description: Enabled controls whether this authenticator is enabled
+                  or disabled
+                type: boolean
+              interfaces:
+                description: Interfaces is the list of interfaces to protect under
+                  this authenticator instance
+                items:
+                  type: string
+                type: array
+            required:
+            - authentication
+            - enabled
+            - interfaces
+            type: object
+          status:
+            description: AuthenticatorStatus defines the observed state of Authenticator
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: []
+  storedVersions: []
