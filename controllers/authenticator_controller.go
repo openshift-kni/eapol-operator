@@ -17,8 +17,17 @@ limitations under the License.
 package controllers
 
 import (
+	"bytes"
 	"context"
+	_ "embed"
+	"fmt"
+	"html/template"
+	"reflect"
 
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -47,9 +56,81 @@ type AuthenticatorReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.11.0/pkg/reconcile
 func (r *AuthenticatorReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = log.FromContext(ctx)
+	log := log.FromContext(ctx)
 
-	// TODO(user): your logic here
+	a11r := &eapolv1.Authenticator{}
+	err := r.Get(ctx, req.NamespacedName, a11r)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			log.Info("Authenticator was deleted")
+			// No other action needed: k8s GC will clean up all owned objects
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
+	}
+
+	// Check if the configmap already exists
+	newCm, err := r.configmapForAuthenticator(a11r)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("Failed to generate ConfigMap content: %e", err)
+	}
+
+	cm := &corev1.ConfigMap{}
+	err = r.Get(ctx, req.NamespacedName, cm)
+	if err != nil && errors.IsNotFound(err) {
+		// Configmap not found; create it
+		log.Info("Creating a new ConfigMap")
+		err = r.createOwned(ctx, a11r, newCm)
+		if err != nil {
+			log.Error(err, "Failed to create new ConfigMap")
+			return ctrl.Result{}, err
+		}
+	} else if err != nil {
+		log.Error(err, "Failed to get ConfigMap")
+		return ctrl.Result{}, err
+	} else {
+		// ConfigMap was found; Update contents if changed
+		if !reflect.DeepEqual(cm.Data, newCm.Data) {
+			cm.Data = newCm.Data
+			log.Info("Updating ConfigMap")
+			err = r.Update(ctx, newCm)
+			if err != nil {
+				log.Error(err, "Failed to update ConfigMap")
+				return ctrl.Result{}, err
+			}
+			// TODO: Signal the DS to restart and/or reload its config?
+			// or does the pod watch for changes and just do it?
+		}
+	}
+
+	// Check if the daemonset already exists
+	newDs := r.daemonsetForAuthenticator(a11r)
+	ds := &appsv1.DaemonSet{}
+	err = r.Get(ctx, req.NamespacedName, ds)
+	if err != nil && errors.IsNotFound(err) {
+		// Daemonset not found; create it
+		log.Info("Creating a new DaemonSet")
+		err = r.createOwned(ctx, a11r, newDs)
+		if err != nil {
+			log.Error(err, "Failed to create new Daemonset")
+			return ctrl.Result{}, err
+		}
+	} else if err != nil {
+		log.Error(err, "Failed to get Daemonset")
+		return ctrl.Result{}, err
+	} else {
+		// Daemonset was found; Take action if it changed?
+		if !reflect.DeepEqual(ds.Spec, newDs.Spec) {
+			ds.Spec = newDs.Spec
+			log.Info("Updating DaemonSet")
+			err = r.Update(ctx, ds)
+			if err != nil {
+				log.Error(err, "Failed to update Daemonset")
+				return ctrl.Result{}, err
+			}
+			// TODO: Restart or signal the DS pod?  Volumes may have changed
+		}
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -59,4 +140,97 @@ func (r *AuthenticatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&eapolv1.Authenticator{}).
 		Complete(r)
+}
+
+func (r *AuthenticatorReconciler) createOwned(ctx context.Context, owner, obj client.Object, opts ...client.CreateOption) error {
+	ctrl.SetControllerReference(owner, obj, r.Scheme)
+	return r.Create(ctx, obj, opts...)
+}
+
+func logObjKeys(obj metav1.Object) []interface{} {
+	return []interface{}{"Namespace", obj.GetNamespace(), "Name", obj.GetName()}
+}
+
+//go:embed data/hostapd.conf.tmpl
+var hostapdConfTemplate string
+
+func (r *AuthenticatorReconciler) configmapForAuthenticator(a11r *eapolv1.Authenticator) (*corev1.ConfigMap, error) {
+	var buffer bytes.Buffer
+	tmpl, err := template.New("hostapd.conf").Parse(hostapdConfTemplate)
+	if err != nil {
+		return nil, err
+	}
+	err = tmpl.Execute(&buffer, a11r.Spec)
+	if err != nil {
+		return nil, err
+	}
+	cm := &corev1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      a11r.Name,
+			Namespace: a11r.Namespace,
+		},
+		Data: map[string]string{
+			"hostapd.conf": buffer.String(),
+		},
+	}
+	return cm, nil
+}
+
+func (r *AuthenticatorReconciler) daemonsetForAuthenticator(a11r *eapolv1.Authenticator) *appsv1.DaemonSet {
+	ls := map[string]string{"app": "authenticator.eapol", "authenticator.eapol": a11r.Name}
+	volumes := []corev1.Volume{{
+		Name: "config-volume",
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: a11r.Name,
+				},
+			},
+		},
+	}}
+	volumeMounts := []corev1.VolumeMount{{
+		Name:      "config-volume",
+		MountPath: "/etc/config",
+	}}
+	if a11r.Spec.Authentication.LocalSecret != "" {
+		volumes = append(volumes, corev1.Volume{
+			Name: "local-users",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: a11r.Spec.Authentication.LocalSecret,
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      "local-users",
+			MountPath: "/etc/local-users",
+		})
+	}
+	ds := &appsv1.DaemonSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      a11r.Name,
+			Namespace: a11r.Namespace,
+		},
+		Spec: appsv1.DaemonSetSpec{
+			Selector: &metav1.LabelSelector{
+				MatchLabels: ls,
+			},
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: ls,
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						// TODO: A real hostAPD container...
+						Name:         "hostapd",
+						Image:        "ubi8-minimal",
+						Command:      []string{"sleep", "infinity"},
+						VolumeMounts: volumeMounts,
+					}},
+					Volumes: volumes,
+				},
+			},
+		},
+	}
+	return ds
 }
