@@ -2,3 +2,10 @@
 resources:
 - eapol_v1_authenticator.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples
+secretGenerator:
+- name: localauth
+  files:
+  - hostapd.eap_user
+
+configurations:
+- kustomizeconfig/authenticator.yaml

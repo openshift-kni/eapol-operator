@@ -3,4 +3,6 @@ kind: Authenticator
 metadata:
   name: authenticator-sample
 spec:
-  # TODO(user): Add fields here
+  interfaces: [ "eth0" ]
+  authentication:
+    localSecret: "localauth"

@@ -51,12 +51,14 @@ func ContainLocaluserVolumeMount() types.GomegaMatcher {
 	}))
 }
 
-func ContainLocaluserVolume(secretName string) types.GomegaMatcher {
+func ContainLocaluserProjection(secretName string) types.GomegaMatcher {
 	return ContainElement(MatchFields(IgnoreExtras, Fields{
-		"Name": Equal("local-users"),
-		"VolumeSource": MatchFields(IgnoreExtras, Fields{
-			"Secret": PointTo(MatchFields(IgnoreExtras, Fields{"SecretName": Equal(secretName)})),
-		}),
+		"Secret": PointTo(
+			MatchFields(IgnoreExtras, Fields{
+				"LocalObjectReference": MatchFields(IgnoreExtras, Fields{
+					"Name": Equal(secretName),
+				}),
+			})),
 	}))
 }
 
@@ -71,20 +73,14 @@ var _ = Describe("daemonsetForAuthenticator", func() {
 		Expect(ds.ObjectMeta.Name).To(Equal(a11r.Name))
 		Expect(ds.ObjectMeta.Namespace).To(Equal(a11r.Namespace))
 	})
-	It("should configure secret volumes when local-auth is configured", func() {
+	It("should configure local-user secret projection when local-auth is configured", func() {
 		a11r.Spec.Authentication.LocalSecret = "localsecretname"
 		ds := r.daemonsetForAuthenticator(a11r)
-		Expect(ds.Spec.Template.Spec.Volumes).To(ContainLocaluserVolume("localsecretname"))
-		Expect(ds.Spec.Template.Spec.Containers[0].VolumeMounts).To(ContainLocaluserVolumeMount())
+		Expect(ds.Spec.Template.Spec.Volumes[0].Projected.Sources).To(ContainLocaluserProjection("localsecretname"))
 	})
-	It("should not configure secret volumes when local-auth is not configured", func() {
+	It("should not configure local-user secret projection when local-auth is not configured", func() {
 		ds := r.daemonsetForAuthenticator(a11r)
-		Expect(ds.Spec.Template.Spec.Volumes).NotTo(ContainElement(MatchFields(IgnoreExtras, Fields{
-			"Name": Equal("local-users"),
-		})))
-		Expect(ds.Spec.Template.Spec.Containers[0].VolumeMounts).NotTo(ContainElement(MatchFields(IgnoreExtras, Fields{
-			"Name": Equal("local-users"),
-		})))
+		Expect(ds.Spec.Template.Spec.Volumes[0].Projected.Sources).NotTo(ContainLocaluserProjection("localsecretname"))
 	})
 })
 
@@ -137,7 +133,7 @@ var _ = Describe("configmapForAuthenticator", func() {
 		cm, err := r.configmapForAuthenticator(a11r)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cm.Data["hostapd.conf"]).To(ContainSubstring("\neap_server=1\n"))
-		Expect(cm.Data["hostapd.conf"]).To(ContainSubstring("\neap_user_file=/etc/local-users/hostapd.eap_user\n"))
+		Expect(cm.Data["hostapd.conf"]).To(ContainSubstring("\neap_user_file=/config/hostapd.eap_user\n"))
 	})
 	It("should configure the RADIUS server when configured", func() {
 		a11r.Spec.Authentication.Radius = &eapolv1.Radius{
@@ -244,9 +240,10 @@ var _ = Describe("Reconcile", func() {
 			return cm.Data["hostapd.conf"]
 		}).Should(ContainSubstring("\neap_server=1\n"))
 
-		Eventually(func() []corev1.VolumeMount {
+		Eventually(func() []corev1.VolumeProjection {
 			Expect(k8sClient.Get(ctx, key, ds)).To(Succeed())
-			return ds.Spec.Template.Spec.Containers[0].VolumeMounts
-		}).Should(ContainLocaluserVolumeMount())
+			return ds.Spec.Template.Spec.Volumes[0].Projected.Sources
+		}).Should(
+			ContainLocaluserProjection("local-secret"))
 	})
 })

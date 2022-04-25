@@ -178,32 +178,20 @@ func (r *AuthenticatorReconciler) configmapForAuthenticator(a11r *eapolv1.Authen
 
 func (r *AuthenticatorReconciler) daemonsetForAuthenticator(a11r *eapolv1.Authenticator) *appsv1.DaemonSet {
 	ls := map[string]string{"app": "authenticator.eapol", "authenticator.eapol": a11r.Name}
-	volumes := []corev1.Volume{{
-		Name: "config-volume",
-		VolumeSource: corev1.VolumeSource{
-			ConfigMap: &corev1.ConfigMapVolumeSource{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: a11r.Name,
-				},
+	projectedConfigVolumes := []corev1.VolumeProjection{{
+		ConfigMap: &corev1.ConfigMapProjection{
+			LocalObjectReference: corev1.LocalObjectReference{
+				Name: a11r.Name,
 			},
 		},
 	}}
-	volumeMounts := []corev1.VolumeMount{{
-		Name:      "config-volume",
-		MountPath: "/etc/config",
-	}}
 	if a11r.Spec.Authentication.LocalSecret != "" {
-		volumes = append(volumes, corev1.Volume{
-			Name: "local-users",
-			VolumeSource: corev1.VolumeSource{
-				Secret: &corev1.SecretVolumeSource{
-					SecretName: a11r.Spec.Authentication.LocalSecret,
+		projectedConfigVolumes = append(projectedConfigVolumes, corev1.VolumeProjection{
+			Secret: &corev1.SecretProjection{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: a11r.Spec.Authentication.LocalSecret,
 				},
 			},
-		})
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      "local-users",
-			MountPath: "/etc/local-users",
 		})
 	}
 	ds := &appsv1.DaemonSet{
@@ -222,12 +210,22 @@ func (r *AuthenticatorReconciler) daemonsetForAuthenticator(a11r *eapolv1.Authen
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
 						// TODO: A real hostAPD container...
-						Name:         "hostapd",
-						Image:        "ubi8-minimal",
-						Command:      []string{"sleep", "infinity"},
-						VolumeMounts: volumeMounts,
+						Name:    "hostapd",
+						Image:   "ubi8-minimal",
+						Command: []string{"sleep", "infinity"},
+						VolumeMounts: []corev1.VolumeMount{{
+							Name:      "config-volume",
+							MountPath: "/config",
+						}},
 					}},
-					Volumes: volumes,
+					Volumes: []corev1.Volume{{
+						Name: "config-volume",
+						VolumeSource: corev1.VolumeSource{
+							Projected: &corev1.ProjectedVolumeSource{
+								Sources: projectedConfigVolumes,
+							},
+						},
+					}},
 				},
 			},
 		},
