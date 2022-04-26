@@ -42,6 +42,14 @@ type AuthenticatorReconciler struct {
 	Scheme *runtime.Scheme
 }
 
+const (
+	appId            = "authenticator.eapol"
+	configFile       = "hostapd.conf"
+	userFile         = "hostapd.eap_user"
+	configMountPath  = "/config"
+	configVolumeName = "config-volume"
+)
+
 //+kubebuilder:rbac:groups=eapol.eapol.openshift.io,resources=authenticators,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=eapol.eapol.openshift.io,resources=authenticators/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=eapol.eapol.openshift.io,resources=authenticators/finalizers,verbs=update
@@ -156,7 +164,7 @@ var hostapdConfTemplate string
 
 func (r *AuthenticatorReconciler) configmapForAuthenticator(a11r *eapolv1.Authenticator) (*corev1.ConfigMap, error) {
 	var buffer bytes.Buffer
-	tmpl, err := template.New("hostapd.conf").Parse(hostapdConfTemplate)
+	tmpl, err := template.New(configFile).Parse(hostapdConfTemplate)
 	if err != nil {
 		return nil, err
 	}
@@ -170,27 +178,39 @@ func (r *AuthenticatorReconciler) configmapForAuthenticator(a11r *eapolv1.Authen
 			Namespace: a11r.Namespace,
 		},
 		Data: map[string]string{
-			"hostapd.conf": buffer.String(),
+			configFile: buffer.String(),
 		},
 	}
 	return cm, nil
 }
 
 func (r *AuthenticatorReconciler) daemonsetForAuthenticator(a11r *eapolv1.Authenticator) *appsv1.DaemonSet {
-	ls := map[string]string{"app": "authenticator.eapol", "authenticator.eapol": a11r.Name}
+	ls := map[string]string{"app": appId, appId: a11r.Name}
 	projectedConfigVolumes := []corev1.VolumeProjection{{
 		ConfigMap: &corev1.ConfigMapProjection{
 			LocalObjectReference: corev1.LocalObjectReference{
 				Name: a11r.Name,
 			},
+			Items: []corev1.KeyToPath{{
+				Key:  configFile,
+				Path: configFile,
+			}},
 		},
 	}}
-	if a11r.Spec.Authentication.LocalSecret != "" {
+	if a11r.Spec.Authentication.Local != nil && a11r.Spec.Authentication.Local.UserFileSecret != nil {
+		secretKey := a11r.Spec.Authentication.Local.UserFileSecret.Key
+		if secretKey == "" {
+			secretKey = userFile
+		}
 		projectedConfigVolumes = append(projectedConfigVolumes, corev1.VolumeProjection{
 			Secret: &corev1.SecretProjection{
 				LocalObjectReference: corev1.LocalObjectReference{
-					Name: a11r.Spec.Authentication.LocalSecret,
+					Name: a11r.Spec.Authentication.Local.UserFileSecret.Name,
 				},
+				Items: []corev1.KeyToPath{{
+					Key:  secretKey,
+					Path: userFile,
+				}},
 			},
 		})
 	}
@@ -214,12 +234,12 @@ func (r *AuthenticatorReconciler) daemonsetForAuthenticator(a11r *eapolv1.Authen
 						Image:   "ubi8-minimal",
 						Command: []string{"sleep", "infinity"},
 						VolumeMounts: []corev1.VolumeMount{{
-							Name:      "config-volume",
-							MountPath: "/config",
+							Name:      configVolumeName,
+							MountPath: configMountPath,
 						}},
 					}},
 					Volumes: []corev1.Volume{{
-						Name: "config-volume",
+						Name: configVolumeName,
 						VolumeSource: corev1.VolumeSource{
 							Projected: &corev1.ProjectedVolumeSource{
 								Sources: projectedConfigVolumes,

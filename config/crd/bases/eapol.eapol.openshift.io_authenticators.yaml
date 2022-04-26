@@ -40,10 +40,25 @@ spec:
                 description: Authentication configures back-end authentication for
                   this authenticator
                 properties:
-                  localSecret:
-                    description: LocalSecret configures the local internal authentication
-                      server based on the given secret
-                    type: string
+                  local:
+                    description: Local configures the local internal authentication
+                      server
+                    properties:
+                      userFileSecret:
+                        description: UserFileSecret configures the local authentication
+                          user file based on a secret contents. If the key is not
+                          specified, it is assumed to be "hostapd.eap_user"
+                        properties:
+                          key:
+                            description: Key is the key in the secret to refer to
+                            type: string
+                          name:
+                            description: Name is the name of the secret to reference
+                            type: string
+                        required:
+                        - name
+                        type: object
+                    type: object
                   radius:
                     description: Radius is the external RADIUS server configuration
                       to use for authentication

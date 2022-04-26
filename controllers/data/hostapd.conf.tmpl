@@ -22,7 +22,7 @@ eap_reauth_period={{ with .Configuration -}}
 
 use_pae_group_addr=1
 
-{{ if .Authentication.LocalSecret }}
+{{ with .Authentication.Local -}}
 ##### Integrated EAP server ###################################################
 
 # Use integrated EAP server instead of external RADIUS authentication
@@ -30,10 +30,12 @@ use_pae_group_addr=1
 # authentication server.
 eap_server=1
 
+{{ if .UserFileSecret -}}
 # Path for EAP server user database
 # If SQLite support is included, this can be set to "sqlite:/path/to/sqlite.db"
 # to use SQLite database instead of a text file.
 eap_user_file=/config/hostapd.eap_user
+{{- end }}
 
 # CA certificate (PEM or DER file) for EAP-TLS/PEAP/TTLS
 #ca_cert=/etc/hostapd.ca.pem

@@ -1,5 +1,5 @@
 nameReference:
 - kind: Secret
   fieldSpecs:
-  - path: spec/authentication/localSecret
+  - path: spec/authentication/local/userFileSecret/name
     kind: Authenticator

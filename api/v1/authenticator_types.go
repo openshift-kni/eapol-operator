@@ -45,13 +45,21 @@ type AuthenticatorSpec struct {
 
 // Auth represents back-end authentication configuration
 type Auth struct {
-	// LocalSecret configures the local internal authentication server based on the given secret
+	// Local configures the local internal authentication server
 	// +optional
-	LocalSecret string `json:"localSecret,omitempty"`
+	Local *Local `json:"local,omitempty"`
 
 	// Radius is the external RADIUS server configuration to use for authentication
 	// +optional
 	Radius *Radius `json:"radius,omitempty"`
+}
+
+// Local represents a local EAP authentication configuration
+type Local struct {
+	// UserFileSecret configures the local authentication user file based on a secret contents.
+	// If the key is not specified, it is assumed to be "hostapd.eap_user"
+	// +optional
+	UserFileSecret *SecretKeyRef `json:"userFileSecret,omitempty"`
 }
 
 // Radius represents a RADIUS server configuration
@@ -64,6 +72,15 @@ type Radius struct {
 
 	// AuthSecret is the name of the Secret that contains the RADIUS authentication server shared secret
 	AuthSecret string `json:"authSecret"`
+}
+
+type SecretKeyRef struct {
+	// Name is the name of the secret to reference
+	Name string `json:"name"`
+
+	// Key is the key in the secret to refer to
+	// +optional
+	Key string `json:"key,omitempty"`
 }
 
 // Config represents miscelaneous 802.1x and EAP tunable values

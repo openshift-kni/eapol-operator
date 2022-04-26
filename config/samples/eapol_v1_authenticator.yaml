@@ -5,4 +5,6 @@ metadata:
 spec:
   interfaces: [ "eth0" ]
   authentication:
-    localSecret: "localauth"
+    local:
+      userFileSecret:
+        name: "localauth"

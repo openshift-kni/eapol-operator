@@ -62,6 +62,15 @@ func ContainLocaluserProjection(secretName string) types.GomegaMatcher {
 	}))
 }
 
+func SetupUserFileAuth(a11r *eapolv1.Authenticator, secretName, key string) {
+	a11r.Spec.Authentication.Local = &eapolv1.Local{
+		UserFileSecret: &eapolv1.SecretKeyRef{
+			Name: secretName,
+			Key:  key,
+		},
+	}
+}
+
 var _ = Describe("daemonsetForAuthenticator", func() {
 	var a11r *eapolv1.Authenticator
 	r := AuthenticatorReconciler{}
@@ -74,7 +83,7 @@ var _ = Describe("daemonsetForAuthenticator", func() {
 		Expect(ds.ObjectMeta.Namespace).To(Equal(a11r.Namespace))
 	})
 	It("should configure local-user secret projection when local-auth is configured", func() {
-		a11r.Spec.Authentication.LocalSecret = "localsecretname"
+		SetupUserFileAuth(a11r, "localsecretname", "hostapd.eap_user")
 		ds := r.daemonsetForAuthenticator(a11r)
 		Expect(ds.Spec.Template.Spec.Volumes[0].Projected.Sources).To(ContainLocaluserProjection("localsecretname"))
 	})
@@ -129,7 +138,7 @@ var _ = Describe("configmapForAuthenticator", func() {
 		Expect(cm.Data["hostapd.conf"]).To(ContainSubstring("\neap_reauth_period=0\n"))
 	})
 	It("should configure the internal EAP server when local-auth is configured", func() {
-		a11r.Spec.Authentication.LocalSecret = "localsecret"
+		SetupUserFileAuth(a11r, "localsecret", "")
 		cm, err := r.configmapForAuthenticator(a11r)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(cm.Data["hostapd.conf"]).To(ContainSubstring("\neap_server=1\n"))
@@ -232,7 +241,7 @@ var _ = Describe("Reconcile", func() {
 		Expect(ds.Spec.Template.Spec.Containers[0].VolumeMounts).NotTo(ContainLocaluserVolumeMount())
 
 		By("Updating the Authenticator's authentication type")
-		a11r.Spec.Authentication.LocalSecret = "local-secret"
+		SetupUserFileAuth(a11r, "local-secret", "")
 		Expect(k8sClient.Update(ctx, a11r)).To(Succeed())
 
 		Eventually(func() string {
