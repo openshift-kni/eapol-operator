@@ -1,7 +1,6 @@
 package controllers
 
 import (
-	"strings"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -16,6 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	eapolv1 "github.com/openshift-kni/eapol-operator/api/v1"
+	. "github.com/openshift-kni/eapol-operator/internal/testutils"
 )
 
 func makeReconciler() *AuthenticatorReconciler {
@@ -24,137 +24,6 @@ func makeReconciler() *AuthenticatorReconciler {
 		Scheme: k8sClient.Scheme(),
 	}
 }
-
-func makeA11r() *eapolv1.Authenticator {
-	a11r := &eapolv1.Authenticator{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: "eapol.eapol.openshift.io/v1",
-			Kind:       "Authenticator",
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "authenticator",
-			Namespace: "default",
-		},
-		Spec: eapolv1.AuthenticatorSpec{
-			Enabled:        true,
-			Interfaces:     []string{"eth0"},
-			Authentication: eapolv1.Auth{},
-		},
-	}
-	return a11r
-}
-
-func ContainLocaluserVolumeMount() types.GomegaMatcher {
-	return ContainElement(MatchFields(IgnoreExtras, Fields{
-		"Name":      Equal("local-users"),
-		"MountPath": Equal("/etc/local-users"),
-	}))
-}
-
-func ContainLocaluserProjection(secretName string) types.GomegaMatcher {
-	return ContainElement(MatchFields(IgnoreExtras, Fields{
-		"Secret": PointTo(
-			MatchFields(IgnoreExtras, Fields{
-				"LocalObjectReference": MatchFields(IgnoreExtras, Fields{
-					"Name": Equal(secretName),
-				}),
-			})),
-	}))
-}
-
-func SetupUserFileAuth(a11r *eapolv1.Authenticator, secretName, key string) {
-	a11r.Spec.Authentication.Local = &eapolv1.Local{
-		UserFileSecret: &eapolv1.SecretKeyRef{
-			Name: secretName,
-			Key:  key,
-		},
-	}
-}
-
-var _ = Describe("daemonsetForAuthenticator", func() {
-	var a11r *eapolv1.Authenticator
-	r := AuthenticatorReconciler{}
-	BeforeEach(func() {
-		a11r = makeA11r()
-	})
-	It("should generate a DaemonSet with the right name", func() {
-		ds := r.daemonsetForAuthenticator(a11r)
-		Expect(ds.ObjectMeta.Name).To(Equal(a11r.Name))
-		Expect(ds.ObjectMeta.Namespace).To(Equal(a11r.Namespace))
-	})
-	It("should configure local-user secret projection when local-auth is configured", func() {
-		SetupUserFileAuth(a11r, "localsecretname", "hostapd.eap_user")
-		ds := r.daemonsetForAuthenticator(a11r)
-		Expect(ds.Spec.Template.Spec.Volumes[0].Projected.Sources).To(ContainLocaluserProjection("localsecretname"))
-	})
-	It("should not configure local-user secret projection when local-auth is not configured", func() {
-		ds := r.daemonsetForAuthenticator(a11r)
-		Expect(ds.Spec.Template.Spec.Volumes[0].Projected.Sources).NotTo(ContainLocaluserProjection("localsecretname"))
-	})
-})
-
-var _ = Describe("configmapForAuthenticator", func() {
-	var a11r *eapolv1.Authenticator
-	r := AuthenticatorReconciler{}
-	BeforeEach(func() {
-		a11r = makeA11r()
-	})
-	It("should create a ConfigMap with the right name", func() {
-		cm, err := r.configmapForAuthenticator(a11r)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(cm.Name).To(Equal(a11r.Name))
-		Expect(cm.Namespace).To(Equal(a11r.Namespace))
-	})
-	It("should create the right Interface entry with a single interface input", func() {
-		cm, err := r.configmapForAuthenticator(a11r)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(cm.Data["hostapd.conf"]).To(ContainSubstring("\ninterface=eth0\n"))
-	})
-	It("should create the right Interface entry with multiple interface input", func() {
-		a11r.Spec.Interfaces = strings.Split("nic1,nic2,nic3", ",")
-		cm, err := r.configmapForAuthenticator(a11r)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(cm.Data["hostapd.conf"]).To(ContainSubstring("\ninterface=nic1,nic2,nic3\n"))
-	})
-	It("should configure the eap_reauth_period correctly when no configuration is provided", func() {
-		cm, err := r.configmapForAuthenticator(a11r)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(cm.Data["hostapd.conf"]).To(ContainSubstring("\neap_reauth_period=3600\n"))
-	})
-	It("should configure the eap_reauth_period correctly when a specific configuration is provided", func() {
-		a11r.Spec.Configuration = &eapolv1.Config{
-			EapReauthPeriod: 42,
-		}
-		cm, err := r.configmapForAuthenticator(a11r)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(cm.Data["hostapd.conf"]).To(ContainSubstring("\neap_reauth_period=42\n"))
-	})
-	It("should configure the eap_reauth_period correctly when a zeroed configuration is provided", func() {
-		a11r.Spec.Configuration = &eapolv1.Config{
-			EapReauthPeriod: 0,
-		}
-		cm, err := r.configmapForAuthenticator(a11r)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(cm.Data["hostapd.conf"]).To(ContainSubstring("\neap_reauth_period=0\n"))
-	})
-	It("should configure the internal EAP server when local-auth is configured", func() {
-		SetupUserFileAuth(a11r, "localsecret", "")
-		cm, err := r.configmapForAuthenticator(a11r)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(cm.Data["hostapd.conf"]).To(ContainSubstring("\neap_server=1\n"))
-		Expect(cm.Data["hostapd.conf"]).To(ContainSubstring("\neap_user_file=/config/hostapd.eap_user\n"))
-	})
-	It("should configure the RADIUS server when configured", func() {
-		a11r.Spec.Authentication.Radius = &eapolv1.Radius{
-			AuthServer: "1.1.1.1",
-			AuthPort:   8080,
-		}
-		cm, err := r.configmapForAuthenticator(a11r)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(cm.Data["hostapd.conf"]).To(ContainSubstring("\nauth_server_addr=1.1.1.1\n"))
-		Expect(cm.Data["hostapd.conf"]).To(ContainSubstring("\nauth_server_port=8080\n"))
-	})
-})
 
 func BeOwnedBy(obj metav1.Object) types.GomegaMatcher {
 	return MatchFields(IgnoreExtras, Fields{
@@ -176,7 +45,7 @@ var _ = Describe("Reconcile", func() {
 	var key client.ObjectKey
 
 	BeforeEach(func() {
-		a11r = makeA11r()
+		a11r = NewA11r()
 		key = client.ObjectKey{
 			Name:      a11r.Name,
 			Namespace: a11r.Namespace,
