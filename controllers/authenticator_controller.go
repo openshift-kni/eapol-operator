@@ -48,6 +48,7 @@ const (
 	userFile         = "hostapd.eap_user"
 	configMountPath  = "/config"
 	configVolumeName = "config-volume"
+	defaultImage     = "quay.io/openshift-kni/eapol-authenticator:latest"
 )
 
 //+kubebuilder:rbac:groups=eapol.eapol.openshift.io,resources=authenticators,verbs=get;list;watch;create;update;patch;delete
@@ -214,6 +215,10 @@ func (r *AuthenticatorReconciler) daemonsetForAuthenticator(a11r *eapolv1.Authen
 			},
 		})
 	}
+	image := a11r.Spec.Image
+	if image == "" {
+		image = defaultImage
+	}
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      a11r.Name,
@@ -229,10 +234,8 @@ func (r *AuthenticatorReconciler) daemonsetForAuthenticator(a11r *eapolv1.Authen
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{{
-						// TODO: A real hostAPD container...
-						Name:    "hostapd",
-						Image:   "ubi8-minimal",
-						Command: []string{"sleep", "infinity"},
+						Name:  "hostapd",
+						Image: image,
 						VolumeMounts: []corev1.VolumeMount{{
 							Name:      configVolumeName,
 							MountPath: configMountPath,

@@ -41,6 +41,10 @@ type AuthenticatorSpec struct {
 	// Configuration contains various low-level EAP tunable values
 	// +optional
 	Configuration *Config `json:"configuration,omitempty"`
+
+	// Image optionally overrides the default eapol-authenticator container image
+	// +optional
+	Image string `json:"image,omitempty"`
 }
 
 // Auth represents back-end authentication configuration
