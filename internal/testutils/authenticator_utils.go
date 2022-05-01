@@ -21,9 +21,11 @@ func NewA11r() *eapolv1.Authenticator {
 			Namespace: "default",
 		},
 		Spec: eapolv1.AuthenticatorSpec{
-			Enabled:        true,
-			Interfaces:     []string{"eth0"},
-			Authentication: eapolv1.Auth{},
+			Enabled:    true,
+			Interfaces: []string{"eth0"},
+			Authentication: eapolv1.Auth{
+				Radius: &eapolv1.Radius{},
+			},
 		},
 	}
 	return a11r
@@ -48,10 +50,16 @@ func ContainLocaluserProjection(secretName string) types.GomegaMatcher {
 }
 
 func SetupUserFileAuth(a11r *eapolv1.Authenticator, secretName, key string) {
+	a11r.Spec.Authentication.Radius = nil
 	a11r.Spec.Authentication.Local = &eapolv1.Local{
 		UserFileSecret: &eapolv1.SecretKeyRef{
 			Name: secretName,
 			Key:  key,
 		},
 	}
+}
+
+func SetupRadiusAuth(a11r *eapolv1.Authenticator) {
+	a11r.Spec.Authentication.Local = nil
+	a11r.Spec.Authentication.Radius = &eapolv1.Radius{}
 }

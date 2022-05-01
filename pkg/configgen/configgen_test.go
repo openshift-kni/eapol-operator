@@ -26,8 +26,23 @@ var _ = Describe("Daemonset", func() {
 		Expect(ds.Spec.Template.Spec.Volumes[0].Projected.Sources).To(ContainLocaluserProjection("localsecretname"))
 	})
 	It("should not configure local-user secret projection when local-auth is not configured", func() {
+		cfggen.a11r.Spec.Authentication.Local = nil
 		ds := cfggen.Daemonset()
 		Expect(ds.Spec.Template.Spec.Volumes[0].Projected.Sources).NotTo(ContainLocaluserProjection("localsecretname"))
+	})
+	It("should not configure local-user secret projection when user-secret is not configured", func() {
+		cfggen.a11r.Spec.Authentication.Local = &eapolv1.Local{}
+		ds := cfggen.Daemonset()
+		Expect(ds.Spec.Template.Spec.Volumes[0].Projected.Sources).NotTo(ContainLocaluserProjection("localsecretname"))
+	})
+	It("should set a reasonable image name default", func() {
+		ds := cfggen.Daemonset()
+		Expect(ds.Spec.Template.Spec.Containers[0].Image).NotTo(BeEmpty())
+	})
+	It("should override the image name when specified", func() {
+		cfggen.a11r.Spec.Image = "image:override"
+		ds := cfggen.Daemonset()
+		Expect(ds.Spec.Template.Spec.Containers[0].Image).To(Equal("image:override"))
 	})
 })
 
