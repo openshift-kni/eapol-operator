@@ -233,6 +233,7 @@ func (r *AuthenticatorReconciler) daemonsetForAuthenticator(a11r *eapolv1.Authen
 					Labels: ls,
 				},
 				Spec: corev1.PodSpec{
+					HostNetwork: true,
 					Containers: []corev1.Container{{
 						Name:  "hostapd",
 						Image: image,
