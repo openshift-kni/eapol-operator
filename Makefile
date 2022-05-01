@@ -38,6 +38,9 @@ BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
 # BUNDLE_GEN_FLAGS are the flags passed to the operator-sdk generate bundle command
 BUNDLE_GEN_FLAGS ?= -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
 
+# AUTHENTICATOR_IMG defines the image:tag used for the authenticator container image.
+AUTHENTICATOR_IMG ?= eapol-authenticator:v$(VERSION)
+
 # USE_IMAGE_DIGESTS defines if images are resolved via tags or digests
 # You can enable this value if you would like to use SHA Based Digests
 # To enable set flag to true
@@ -231,3 +234,11 @@ catalog-build: opm ## Build a catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
 	$(MAKE) docker-push IMG=$(CATALOG_IMG)
+
+.PHONY: authenticator-build
+authenticator-build: ## Build the authenticator image.
+	docker build -f ./images/eapol-authenticator/Dockerfile -t $(AUTHENTICATOR_IMG) ./images/eapol-authenticator/
+
+.PHONY: authenticator-push
+authenticator-push: ## Push the authenticator image.
+	$(MAKE) docker-push IMG=$(AUTHENTICATOR_IMG)
