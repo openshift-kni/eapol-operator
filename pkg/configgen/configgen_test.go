@@ -44,6 +44,11 @@ var _ = Describe("Daemonset", func() {
 		ds := cfggen.Daemonset()
 		Expect(ds.Spec.Template.Spec.Containers[0].Image).To(Equal("image:override"))
 	})
+	It("should set a restrictive node selector when disabled", func() {
+		cfggen.a11r.Spec.Enabled = false
+		ds := cfggen.Daemonset()
+		Expect(ds.Spec.Template.Spec.NodeSelector).To(HaveKey("no-node"))
+	})
 })
 
 var _ = Describe("ConfigMap", func() {

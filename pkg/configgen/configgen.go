@@ -73,6 +73,13 @@ func (g *ConfigGenerator) ConfigMap() (*corev1.ConfigMap, error) {
 }
 
 func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
+	nodeSelector := map[string]string{}
+	if !g.a11r.Spec.Enabled {
+		// Daemonsets do not scale, so use an unsatisfiable node selector
+		nodeSelector = map[string]string{
+			"no-node": "Disabled_via_config",
+		}
+	}
 	ls := map[string]string{"app": appId, appId: g.a11r.Name}
 	projectedConfigVolumes := []corev1.VolumeProjection{{
 		ConfigMap: &corev1.ConfigMapProjection{
@@ -120,7 +127,8 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 					Labels: ls,
 				},
 				Spec: corev1.PodSpec{
-					HostNetwork: true,
+					NodeSelector: nodeSelector,
+					HostNetwork:  true,
 					Containers: []corev1.Container{{
 						Name:  "hostapd",
 						Image: image,
