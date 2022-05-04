@@ -108,6 +108,12 @@ spec:
                 items:
                   type: string
                 type: array
+              nodeSelector:
+                additionalProperties:
+                  type: string
+                description: NodeSelector limits the nodes that the authenticator
+                  can run on
+                type: object
             required:
             - authentication
             - enabled

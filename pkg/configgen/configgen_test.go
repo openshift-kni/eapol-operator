@@ -45,8 +45,22 @@ var _ = Describe("Daemonset", func() {
 		Expect(ds.Spec.Template.Spec.Containers[0].Image).To(Equal("image:override"))
 	})
 	It("should set a restrictive node selector when disabled", func() {
-		cfggen.a11r.Spec.Enabled = false
+		cfggen.a11r.Spec.Enabled = true
 		ds := cfggen.Daemonset()
+		Expect(ds.Spec.Template.Spec.NodeSelector).NotTo(HaveKey("no-node"))
+		cfggen.a11r.Spec.Enabled = false
+		ds = cfggen.Daemonset()
+		Expect(ds.Spec.Template.Spec.NodeSelector).To(HaveKey("no-node"))
+	})
+	It("should maintain a user-supplied node selector", func() {
+		cfggen.a11r.Spec.Enabled = true
+		cfggen.a11r.Spec.NodeSelector = map[string]string{"nodeType": "auth"}
+		ds := cfggen.Daemonset()
+		Expect(ds.Spec.Template.Spec.NodeSelector).To(HaveKey("nodeType"))
+		Expect(ds.Spec.Template.Spec.NodeSelector).NotTo(HaveKey("no-node"))
+		cfggen.a11r.Spec.Enabled = false
+		ds = cfggen.Daemonset()
+		Expect(ds.Spec.Template.Spec.NodeSelector).To(HaveKey("nodeType"))
 		Expect(ds.Spec.Template.Spec.NodeSelector).To(HaveKey("no-node"))
 	})
 })

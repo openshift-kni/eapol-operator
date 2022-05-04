@@ -45,6 +45,10 @@ type AuthenticatorSpec struct {
 	// Image optionally overrides the default eapol-authenticator container image
 	// +optional
 	Image string `json:"image,omitempty"`
+
+	// NodeSelector limits the nodes that the authenticator can run on
+	// +optional
+	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
 }
 
 // Auth represents back-end authentication configuration

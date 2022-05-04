@@ -35,6 +35,8 @@ const (
 	configMountPath  = "/config"
 	configVolumeName = "config-volume"
 	defaultImage     = "quay.io/openshift-kni/eapol-authenticator:latest"
+	disabledSelector = "no-node"
+	disabledReason   = "Disabled_via_config"
 )
 
 type ConfigGenerator struct {
@@ -73,12 +75,13 @@ func (g *ConfigGenerator) ConfigMap() (*corev1.ConfigMap, error) {
 }
 
 func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
-	nodeSelector := map[string]string{}
+	nodeSelector := g.a11r.Spec.NodeSelector
 	if !g.a11r.Spec.Enabled {
-		// Daemonsets do not scale, so use an unsatisfiable node selector
-		nodeSelector = map[string]string{
-			"no-node": "Disabled_via_config",
+		if nodeSelector == nil {
+			nodeSelector = make(map[string]string)
 		}
+		// Daemonsets do not scale, so use an unsatisfiable node selector
+		nodeSelector[disabledSelector] = disabledReason
 	}
 	ls := map[string]string{"app": appId, appId: g.a11r.Name}
 	projectedConfigVolumes := []corev1.VolumeProjection{{

@@ -124,4 +124,31 @@ var _ = Describe("Reconcile", func() {
 		}).Should(
 			ContainLocaluserProjection("local-secret"))
 	})
+	It("should disable the daemonset when configured to so so", func() {
+		By("Waiting for object creations")
+		cm = &corev1.ConfigMap{}
+		Eventually(func() error {
+			return k8sClient.Get(ctx, key, cm)
+		}, timeout, interval).Should(Succeed())
+		Eventually(func() error {
+			return k8sClient.Get(ctx, key, cm)
+		}, timeout, interval).Should(Succeed())
+		ds = &appsv1.DaemonSet{}
+		Eventually(func() error {
+			return k8sClient.Get(ctx, key, ds)
+		}, timeout, interval).Should(Succeed())
+
+		Expect(ds.Spec.Template.Spec.NodeSelector).NotTo(HaveKey("no-node"))
+
+		Expect(ds.Spec.Template.Spec.Containers[0].VolumeMounts).NotTo(ContainLocaluserVolumeMount())
+
+		By("disabling the Authenticator")
+		a11r.Spec.Enabled = false
+		Expect(k8sClient.Update(ctx, a11r)).To(Succeed())
+
+		Eventually(func() map[string]string {
+			Expect(k8sClient.Get(ctx, key, ds)).To(Succeed())
+			return ds.Spec.Template.Spec.NodeSelector
+		}).Should(HaveKey("no-node"))
+	})
 })
