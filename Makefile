@@ -38,8 +38,11 @@ BUNDLE_IMG ?= $(IMAGE_TAG_BASE)-bundle:v$(VERSION)
 # BUNDLE_GEN_FLAGS are the flags passed to the operator-sdk generate bundle command
 BUNDLE_GEN_FLAGS ?= -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
 
+# AUTHENTICATOR_IMAGE_BASE defines the base location of the Authenticator image.
+AUTHENTICATOR_IMAGE_BASE ?= quay.io/openshift-kni/eapol-authenticator
+
 # AUTHENTICATOR_IMG defines the image:tag used for the authenticator container image.
-AUTHENTICATOR_IMG ?= eapol-authenticator:v$(VERSION)
+AUTHENTICATOR_IMG ?= $(AUTHENTICATOR_IMAGE_BASE):v$(VERSION)
 
 # USE_IMAGE_DIGESTS defines if images are resolved via tags or digests
 # You can enable this value if you would like to use SHA Based Digests
