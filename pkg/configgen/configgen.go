@@ -29,14 +29,18 @@ import (
 )
 
 const (
-	appId            = "authenticator.eapol"
-	configFile       = "hostapd.conf"
-	userFile         = "hostapd.eap_user"
-	configMountPath  = "/config"
-	configVolumeName = "config-volume"
-	defaultImage     = "quay.io/openshift-kni/eapol-authenticator:latest"
-	disabledSelector = "no-node"
-	disabledReason   = "Disabled_via_config"
+	appId             = "authenticator.eapol"
+	configFile        = "hostapd.conf"
+	userFile          = "hostapd.eap_user"
+	configMountPath   = "/config"
+	configVolumeName  = "config-volume"
+	socketsMountPath  = "/var/run/hostapd"
+	socketsVolumeName = "sockets-volume"
+	defaultImage      = "quay.io/openshift-kni/eapol-authenticator:latest"
+	disabledSelector  = "no-node"
+	disabledReason    = "Disabled_via_config"
+	initCommand       = "/bin/hostapd-init.sh"
+	cliCommand        = "/bin/hostapd-cli.sh"
 )
 
 type ConfigGenerator struct {
@@ -116,6 +120,30 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 	if image == "" {
 		image = defaultImage
 	}
+
+	container := func(name, command string) corev1.Container {
+		c := corev1.Container{
+			Name:  name,
+			Image: image,
+			VolumeMounts: []corev1.VolumeMount{{
+				Name:      configVolumeName,
+				MountPath: configMountPath,
+			}, {
+				Name:      socketsVolumeName,
+				MountPath: socketsMountPath,
+			}},
+			SecurityContext: &corev1.SecurityContext{
+				Capabilities: &corev1.Capabilities{
+					Add: []corev1.Capability{"NET_ADMIN", "NET_RAW"},
+				},
+			},
+		}
+		if command != "" {
+			c.Command = []string{command}
+		}
+		return c
+	}
+
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      g.a11r.Name,
@@ -132,20 +160,24 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 				Spec: corev1.PodSpec{
 					NodeSelector: nodeSelector,
 					HostNetwork:  true,
-					Containers: []corev1.Container{{
-						Name:  "hostapd",
-						Image: image,
-						VolumeMounts: []corev1.VolumeMount{{
-							Name:      configVolumeName,
-							MountPath: configMountPath,
-						}},
-					}},
+					InitContainers: []corev1.Container{
+						container("iface-init", initCommand),
+					},
+					Containers: []corev1.Container{
+						container("hostapd", ""),
+						container("hostapd-cli", cliCommand),
+					},
 					Volumes: []corev1.Volume{{
 						Name: configVolumeName,
 						VolumeSource: corev1.VolumeSource{
 							Projected: &corev1.ProjectedVolumeSource{
 								Sources: projectedConfigVolumes,
 							},
+						},
+					}, {
+						Name: socketsVolumeName,
+						VolumeSource: corev1.VolumeSource{
+							EmptyDir: &corev1.EmptyDirVolumeSource{},
 						},
 					}},
 				},
