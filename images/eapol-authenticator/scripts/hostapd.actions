@@ -1,0 +1,38 @@
+#!/bin/bash
+#
+# Calling convention:
+#
+# script $iface $eventname [$macaddr]
+#
+IFACE=$1
+EVENT=$2
+MAC=$3
+
+log() {
+    echo "[hostapd.actions] $@"
+}
+
+case ${EVENT:-NOTANEVENT} in
+__INIT__)
+    log "$IFACE initialization: restricting all traffic"
+    tc qdisc del dev $IFACE ingress >/dev/null 2>&1
+    tc qdisc del dev $IFACE clsact >/dev/null 2>&1
+    tc qdisc add dev $IFACE clsact
+    tc filter add dev $IFACE ingress pref 10000 protocol 0x888e matchall action ok index 100
+    tc filter add dev $IFACE ingress pref 10001 protocol all matchall action drop index 101
+    # TODO: Also make sure all associated VFs are down
+    ;;
+AP-STA-CONNECTED | CTRL-EVENT-EAP-SUCCESS)
+    log "$IFACE: allow traffic from $MAC"
+    tc filter replace dev $IFACE ingress pref 9000 protocol all flower src_mac $MAC action ok
+    # TODO: Bring up all associated VFs
+    ;;
+AP-STA-DISCONNECTED | CTRL-EVENT-EAP-FAILURE)
+    log "$IFACE: disallow traffic from $MAC"
+    # TODO: Take down all associated VFs
+    tc filter del dev $IFACE ingress pref 9000 protocol all flower
+    ;;
+*)
+    log "$IFACE: ignoring event $EVENT"
+    ;;
+esac
