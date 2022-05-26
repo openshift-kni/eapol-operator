@@ -5,6 +5,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	. "github.com/onsi/gomega/gstruct"
 
 	eapolv1 "github.com/openshift-kni/eapol-operator/api/v1"
 	. "github.com/openshift-kni/eapol-operator/internal/testutils"
@@ -62,6 +63,25 @@ var _ = Describe("Daemonset", func() {
 		ds = cfggen.Daemonset()
 		Expect(ds.Spec.Template.Spec.NodeSelector).To(HaveKey("nodeType"))
 		Expect(ds.Spec.Template.Spec.NodeSelector).To(HaveKey("no-node"))
+	})
+	It("should contain one monitoring container per defined interface", func() {
+		cfggen.a11r.Spec.Interfaces = []string{"iface1"}
+		ds := cfggen.Daemonset()
+		Expect(ds.Spec.Template.Spec.Containers).To(ContainElements(
+			MatchFields(IgnoreExtras, Fields{
+				"Name": Equal("monitor-iface1"),
+			}),
+		))
+		cfggen.a11r.Spec.Interfaces = []string{"iface2", "iface3"}
+		ds = cfggen.Daemonset()
+		Expect(ds.Spec.Template.Spec.Containers).To(ContainElements(
+			MatchFields(IgnoreExtras, Fields{
+				"Name": Equal("monitor-iface2"),
+			}),
+			MatchFields(IgnoreExtras, Fields{
+				"Name": Equal("monitor-iface3"),
+			}),
+		))
 	})
 })
 

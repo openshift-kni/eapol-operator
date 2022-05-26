@@ -19,6 +19,7 @@ package configgen
 import (
 	"bytes"
 	_ "embed"
+	"fmt"
 	"html/template"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -121,7 +122,7 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 		image = defaultImage
 	}
 
-	container := func(name, command string) corev1.Container {
+	container := func(name string) corev1.Container {
 		c := corev1.Container{
 			Name:  name,
 			Image: image,
@@ -138,11 +139,11 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 				},
 			},
 		}
-		if command != "" {
-			c.Command = []string{command}
-		}
 		return c
 	}
+
+	initContainer := container("iface-init")
+	initContainer.Command = []string{initCommand}
 
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -161,11 +162,10 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 					NodeSelector: nodeSelector,
 					HostNetwork:  true,
 					InitContainers: []corev1.Container{
-						container("iface-init", initCommand),
+						initContainer,
 					},
 					Containers: []corev1.Container{
-						container("hostapd", ""),
-						container("hostapd-cli", cliCommand),
+						container("hostapd"),
 					},
 					Volumes: []corev1.Volume{{
 						Name: configVolumeName,
@@ -183,6 +183,20 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 				},
 			},
 		},
+	}
+
+	monitor := func(iface string) corev1.Container {
+		c := container(fmt.Sprintf("monitor-%s", iface))
+		c.Command = []string{cliCommand}
+		c.Env = []corev1.EnvVar{{
+			Name:  "IFACE",
+			Value: iface,
+		}}
+		return c
+	}
+
+	for _, iface := range g.a11r.Spec.Interfaces {
+		ds.Spec.Template.Spec.Containers = append(ds.Spec.Template.Spec.Containers, monitor(iface))
 	}
 	return ds
 }
