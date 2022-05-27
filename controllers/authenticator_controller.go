@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	"github.com/go-test/deep"
 	eapolv1 "github.com/openshift-kni/eapol-operator/api/v1"
 	"github.com/openshift-kni/eapol-operator/pkg/configgen"
 )
@@ -119,8 +120,9 @@ func (r *AuthenticatorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 		log.Error(err, "Failed to get Daemonset")
 		return ctrl.Result{}, err
 	} else {
-		// Daemonset was found; Take action if it changed?
-		if !reflect.DeepEqual(ds.Spec, newDs.Spec) {
+		// Daemonset was found; Update contents if changed
+		if diff := deep.Equal(ds.Spec, newDs.Spec); diff != nil {
+			log.Info(fmt.Sprintf("Current DaemonSet differs from expected: %v", diff))
 			ds.Spec = newDs.Spec
 			log.Info("Updating DaemonSet")
 			err = r.Update(ctx, ds)

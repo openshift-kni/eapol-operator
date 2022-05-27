@@ -26,6 +26,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	eapolv1 "github.com/openshift-kni/eapol-operator/api/v1"
 )
@@ -45,6 +46,15 @@ const (
 	initCommand       = "/bin/hostapd-init.sh"
 	cliCommand        = "/bin/hostapd-cli.sh"
 )
+
+/* Defaults to avoid excessive reconciliations: */
+var defaultFileMode int32 = 420
+var terminationGracePeriod int64 = 30
+var revisionHistoryLimit int32 = 10
+var maxSurge = intstr.FromInt(0)
+var maxUnavailable = intstr.FromInt(1)
+
+/* -------------------------------------------- */
 
 type ConfigGenerator struct {
 	a11r *eapolv1.Authenticator
@@ -142,6 +152,11 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 			},
 			Command: []string{command},
 			Env:     env,
+			/* Defaults to avoid excessive reconciliations: */
+			ImagePullPolicy:          "Always",
+			TerminationMessagePath:   "/dev/termination-log",
+			TerminationMessagePolicy: "File",
+			/* -------------------------------------------- */
 		}
 	}
 
@@ -185,6 +200,9 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 						VolumeSource: corev1.VolumeSource{
 							Projected: &corev1.ProjectedVolumeSource{
 								Sources: projectedConfigVolumes,
+								/* Defaults to avoid excessive reconciliations: */
+								DefaultMode: &defaultFileMode,
+								/* -------------------------------------------- */
 							},
 						},
 					}, {
@@ -193,8 +211,25 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 							EmptyDir: &corev1.EmptyDirVolumeSource{},
 						},
 					}},
+					/* Defaults to avoid excessive reconciliations: */
+					RestartPolicy:                 "Always",
+					TerminationGracePeriodSeconds: &terminationGracePeriod,
+					DNSPolicy:                     "ClusterFirst",
+					SecurityContext:               &corev1.PodSecurityContext{},
+					SchedulerName:                 "default-scheduler",
+					/* -------------------------------------------- */
 				},
 			},
+			/* Defaults to avoid excessive reconciliations: */
+			UpdateStrategy: appsv1.DaemonSetUpdateStrategy{
+				Type: "RollingUpdate",
+				RollingUpdate: &appsv1.RollingUpdateDaemonSet{
+					MaxSurge:       &maxSurge,
+					MaxUnavailable: &maxUnavailable,
+				},
+			},
+			RevisionHistoryLimit: &revisionHistoryLimit,
+			/* -------------------------------------------- */
 		},
 	}
 
