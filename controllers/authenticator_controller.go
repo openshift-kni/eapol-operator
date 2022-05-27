@@ -139,6 +139,8 @@ func (r *AuthenticatorReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 func (r *AuthenticatorReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&eapolv1.Authenticator{}).
+		Owns(&appsv1.DaemonSet{}).
+		Owns(&corev1.ConfigMap{}).
 		Complete(r)
 }
 
