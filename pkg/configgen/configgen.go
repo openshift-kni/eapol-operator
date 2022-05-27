@@ -21,6 +21,7 @@ import (
 	_ "embed"
 	"fmt"
 	"html/template"
+	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -40,6 +41,7 @@ const (
 	defaultImage      = "quay.io/openshift-kni/eapol-authenticator:latest"
 	disabledSelector  = "no-node"
 	disabledReason    = "Disabled_via_config"
+	mainCommand       = "/bin/hostapd-start.sh"
 	initCommand       = "/bin/hostapd-init.sh"
 	cliCommand        = "/bin/hostapd-cli.sh"
 )
@@ -122,8 +124,8 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 		image = defaultImage
 	}
 
-	container := func(name string) corev1.Container {
-		c := corev1.Container{
+	container := func(name, command string, env []corev1.EnvVar) corev1.Container {
+		return corev1.Container{
 			Name:  name,
 			Image: image,
 			VolumeMounts: []corev1.VolumeMount{{
@@ -138,12 +140,12 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 					Add: []corev1.Capability{"NET_ADMIN", "NET_RAW"},
 				},
 			},
+			Command: []string{command},
+			Env:     env,
 		}
-		return c
 	}
 
-	initContainer := container("iface-init")
-	initContainer.Command = []string{initCommand}
+	ifaces := strings.Join(g.a11r.Spec.Interfaces, ",")
 
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -162,10 +164,21 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 					NodeSelector: nodeSelector,
 					HostNetwork:  true,
 					InitContainers: []corev1.Container{
-						initContainer,
+						container("iface-init", initCommand,
+							[]corev1.EnvVar{{
+								Name:  "IFACES",
+								Value: ifaces,
+							}}),
 					},
 					Containers: []corev1.Container{
-						container("hostapd"),
+						container("hostapd", mainCommand,
+							[]corev1.EnvVar{{
+								Name:  "IFACES",
+								Value: ifaces,
+							}, {
+								Name:  "CONFIG",
+								Value: fmt.Sprintf("%s/%s", configMountPath, configFile),
+							}}),
 					},
 					Volumes: []corev1.Volume{{
 						Name: configVolumeName,
@@ -185,18 +198,14 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 		},
 	}
 
-	monitor := func(iface string) corev1.Container {
-		c := container(fmt.Sprintf("monitor-%s", iface))
-		c.Command = []string{cliCommand}
-		c.Env = []corev1.EnvVar{{
-			Name:  "IFACE",
-			Value: iface,
-		}}
-		return c
-	}
-
 	for _, iface := range g.a11r.Spec.Interfaces {
-		ds.Spec.Template.Spec.Containers = append(ds.Spec.Template.Spec.Containers, monitor(iface))
+		ds.Spec.Template.Spec.Containers = append(ds.Spec.Template.Spec.Containers,
+			container(fmt.Sprintf("monitor-%s", iface), cliCommand,
+				[]corev1.EnvVar{{
+					Name:  "IFACE",
+					Value: iface,
+				}}),
+		)
 	}
 	return ds
 }
