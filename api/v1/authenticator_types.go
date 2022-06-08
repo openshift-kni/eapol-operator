@@ -49,6 +49,12 @@ type AuthenticatorSpec struct {
 	// NodeSelector limits the nodes that the authenticator can run on
 	// +optional
 	NodeSelector map[string]string `json:"nodeSelector,omitempty"`
+
+	// TrafficControl configures the traffic allowed in and out when
+	// authenticated and not authenticated.  If unset, the default is to
+	// disallow all traffic until authenticated, and then allow all traffic.
+	// +optional
+	TrafficControl *TrafficControl `json:"trafficControl,omitempty"`
 }
 
 // Auth represents back-end authentication configuration
@@ -96,6 +102,24 @@ type Config struct {
 	// EapReauthPeriod is the EAP reauthentication period in seconds (default: 3600 seconds; 0 = disable)
 	// +kubebuilder:default=3600
 	EapReauthPeriod int `json:"eapReauthPeriod"`
+}
+
+// TrafficControl represents the traffic control for hostapd.
+type TrafficControl struct {
+	// UnprotectedPorts is a list of ingress destination ports to allow even for unathenticated interfaces
+	// +optional
+	UnprotectedPorts *Ports `json:"unprotectedPorts,omitempty"`
+}
+
+// Port represents a single IP port
+type Ports struct {
+	// Tcp is a list of tcp ports
+	// +optional
+	Tcp []int `json:"tcp,omitempty"`
+
+	// Udp is a lits of udp ports
+	// +optional
+	Udp []int `json:"udp,omitempty"`
 }
 
 // AuthenticatorStatus defines the observed state of Authenticator

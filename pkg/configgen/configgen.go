@@ -21,6 +21,7 @@ import (
 	_ "embed"
 	"fmt"
 	"html/template"
+	"strconv"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -162,6 +163,8 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 
 	ifaces := strings.Join(g.a11r.Spec.Interfaces, ",")
 
+	unprotectedTcpList, unprotectedUdpList := g.parsePorts()
+
 	ds := &appsv1.DaemonSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      g.a11r.Name,
@@ -183,6 +186,12 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 							[]corev1.EnvVar{{
 								Name:  "IFACES",
 								Value: ifaces,
+							}, {
+								Name:  "UNPROTECTED_TCP_PORTS",
+								Value: unprotectedTcpList,
+							}, {
+								Name:  "UNPROTECTED_UDP_PORTS",
+								Value: unprotectedUdpList,
 							}}),
 					},
 					Containers: []corev1.Container{
@@ -190,6 +199,12 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 							[]corev1.EnvVar{{
 								Name:  "IFACES",
 								Value: ifaces,
+							}, {
+								Name:  "UNPROTECTED_TCP_PORTS",
+								Value: unprotectedTcpList,
+							}, {
+								Name:  "UNPROTECTED_UDP_PORTS",
+								Value: unprotectedUdpList,
 							}, {
 								Name:  "CONFIG",
 								Value: fmt.Sprintf("%s/%s", configMountPath, configFile),
@@ -239,8 +254,35 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 				[]corev1.EnvVar{{
 					Name:  "IFACE",
 					Value: iface,
+				}, {
+					Name:  "UNPROTECTED_TCP_PORTS",
+					Value: unprotectedTcpList,
+				}, {
+					Name:  "UNPROTECTED_UDP_PORTS",
+					Value: unprotectedUdpList,
 				}}),
 		)
 	}
 	return ds
+}
+
+func (g *ConfigGenerator) parsePorts() (string, string) {
+	if g.a11r.Spec.TrafficControl == nil || g.a11r.Spec.TrafficControl.UnprotectedPorts == nil {
+		return "", ""
+	}
+	tcp := strings.Builder{}
+	for _, tcpPort := range g.a11r.Spec.TrafficControl.UnprotectedPorts.Tcp {
+		if tcp.Len() > 0 {
+			tcp.WriteRune(' ')
+		}
+		tcp.WriteString(strconv.Itoa(tcpPort))
+	}
+	udp := strings.Builder{}
+	for _, udpPort := range g.a11r.Spec.TrafficControl.UnprotectedPorts.Udp {
+		if udp.Len() > 0 {
+			udp.WriteRune(' ')
+		}
+		udp.WriteString(strconv.Itoa(udpPort))
+	}
+	return tcp.String(), udp.String()
 }

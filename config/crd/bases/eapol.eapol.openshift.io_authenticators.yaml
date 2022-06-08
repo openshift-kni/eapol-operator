@@ -114,6 +114,28 @@ spec:
                 description: NodeSelector limits the nodes that the authenticator
                   can run on
                 type: object
+              trafficControl:
+                description: TrafficControl configures the traffic allowed in and
+                  out when authenticated and not authenticated.  If unset, the default
+                  is to disallow all traffic until authenticated, and then allow all
+                  traffic.
+                properties:
+                  unprotectedPorts:
+                    description: UnprotectedPorts is a list of ingress destination
+                      ports to allow even for unathenticated interfaces
+                    properties:
+                      tcp:
+                        description: Tcp is a list of tcp ports
+                        items:
+                          type: integer
+                        type: array
+                      udp:
+                        description: Udp is a lits of udp ports
+                        items:
+                          type: integer
+                        type: array
+                    type: object
+                type: object
             required:
             - authentication
             - enabled

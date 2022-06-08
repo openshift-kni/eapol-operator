@@ -83,6 +83,75 @@ var _ = Describe("Daemonset", func() {
 			}),
 		))
 	})
+	It("should not contain unprotected port lists if not provided", func() {
+		ds := cfggen.Daemonset()
+		Expect(ds.Spec.Template.Spec.Containers[0].Env).To(ContainElements(
+			MatchFields(IgnoreExtras, Fields{
+				"Name":  Equal("UNPROTECTED_TCP_PORTS"),
+				"Value": Equal(""),
+			}),
+			MatchFields(IgnoreExtras, Fields{
+				"Name":  Equal("UNPROTECTED_UDP_PORTS"),
+				"Value": Equal(""),
+			}),
+		))
+	})
+	It("should contain unprotected port lists when provided", func() {
+		cfggen.a11r.Spec.TrafficControl = &eapolv1.TrafficControl{
+			UnprotectedPorts: &eapolv1.Ports{
+				Tcp: []int{53, 80},
+				Udp: []int{53, 319},
+			},
+		}
+		ds := cfggen.Daemonset()
+		Expect(ds.Spec.Template.Spec.Containers[0].Env).To(ContainElements(
+			MatchFields(IgnoreExtras, Fields{
+				"Name":  Equal("UNPROTECTED_TCP_PORTS"),
+				"Value": Equal("53 80"),
+			}),
+			MatchFields(IgnoreExtras, Fields{
+				"Name":  Equal("UNPROTECTED_UDP_PORTS"),
+				"Value": Equal("53 319"),
+			}),
+		))
+	})
+})
+
+var _ = Describe("parsePorts", func() {
+	var cfggen *ConfigGenerator
+	BeforeEach(func() {
+		cfggen = New(NewA11r())
+	})
+	It("should produce empty results if no TrafficControl provided", func() {
+		tcp, udp := cfggen.parsePorts()
+		Expect(tcp).To(BeEmpty())
+		Expect(udp).To(BeEmpty())
+	})
+	It("should produce empty results if no UnprotectedPorts provided", func() {
+		cfggen.a11r.Spec.TrafficControl = &eapolv1.TrafficControl{}
+		tcp, udp := cfggen.parsePorts()
+		Expect(tcp).To(BeEmpty())
+		Expect(udp).To(BeEmpty())
+	})
+	It("should produce empty results if no port list provided", func() {
+		cfggen.a11r.Spec.TrafficControl = &eapolv1.TrafficControl{
+			UnprotectedPorts: &eapolv1.Ports{},
+		}
+		tcp, udp := cfggen.parsePorts()
+		Expect(tcp).To(BeEmpty())
+		Expect(udp).To(BeEmpty())
+	})
+	It("should separate ports by protocol", func() {
+		cfggen.a11r.Spec.TrafficControl = &eapolv1.TrafficControl{
+			UnprotectedPorts: &eapolv1.Ports{
+				Tcp: []int{53, 80},
+				Udp: []int{53, 319},
+			},
+		}
+		tcp, udp := cfggen.parsePorts()
+		Expect(tcp).To(Equal("53 80"))
+		Expect(udp).To(Equal("53 319"))
+	})
 })
 
 var _ = Describe("ConfigMap", func() {
