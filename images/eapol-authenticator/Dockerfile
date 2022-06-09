@@ -1,6 +1,6 @@
 FROM centos:stream8
 
-RUN dnf install -y hostapd
+RUN dnf install -y hostapd iproute-tc
 RUN dnf clean all
 
 COPY scripts/* /bin
