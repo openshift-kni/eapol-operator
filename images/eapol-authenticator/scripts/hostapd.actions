@@ -11,21 +11,21 @@ MAC=$3
 set -e
 
 log() {
-    echo "[hostapd.actions] $@"
+    echo "[hostapd.actions] $*"
 }
 
 logexec() {
-    log "+ $@"
+    log "+ $*"
     "$@"
 }
 
 unprotectPorts() {
     local proto=$1; shift
-    local ports="$@"
-    if [[ -n $ports ]]; then
-        log "$IFACE: allowing unprotected $proto ports $ports"
-        for port in $ports; do
-            logexec tc filter add dev $IFACE ingress pref 9999 protocol ip u32 match "$proto" dst "$port" 0xffff action ok index 99
+    local ports=("$@")
+    if [[ ${#ports[@]} -gt 0 ]]; then
+        log "$IFACE: allowing unprotected $proto ports ${ports[*]}"
+        for port in "${ports[@]}"; do
+            logexec tc filter add dev "$IFACE" ingress pref 9999 protocol ip u32 match "$proto" dst "$port" 0xffff action ok index 99
             # Need to figure out what to do for ipv6, as tc doesn't support it!
         done
     fi
@@ -35,25 +35,27 @@ case ${EVENT:-NOTANEVENT} in
 __INIT__)
     log "$IFACE: restricting all traffic except EAPOL"
     # Best effort: reset qdisc ingress and clsact
-    logexec tc qdisc del dev $IFACE ingress >/dev/null 2>&1 || true
-    logexec tc qdisc del dev $IFACE clsact >/dev/null 2>&1 || true
+    logexec tc qdisc del dev "$IFACE" ingress >/dev/null 2>&1 || true
+    logexec tc qdisc del dev "$IFACE" clsact >/dev/null 2>&1 || true
     # Initialize the interface's qdisc and filters
-    logexec tc qdisc add dev $IFACE clsact
-    logexec tc filter add dev $IFACE ingress pref 10000 protocol 0x888e matchall action ok index 100
-    logexec tc filter add dev $IFACE ingress pref 10001 protocol all matchall action drop index 101
+    logexec tc qdisc add dev "$IFACE" clsact
+    logexec tc filter add dev "$IFACE" ingress pref 10000 protocol 0x888e matchall action ok index 100
+    logexec tc filter add dev "$IFACE" ingress pref 10001 protocol all matchall action drop index 101
     # TODO: Also make sure all associated VFs are down
-    unprotectPorts "tcp" $UNPROTECTED_TCP_PORTS
-    unprotectPorts "udp" $UNPROTECTED_UDP_PORTS
+    read -ra tcpPorts <<<"$UNPROTECTED_TCP_PORTS"
+    read -ra udpPorts <<<"$UNPROTECTED_UDP_PORTS"
+    unprotectPorts "tcp" "${tcpPorts[@]}"
+    unprotectPorts "udp" "${udpPorts[@]}"
     ;;
 AP-STA-CONNECTED | CTRL-EVENT-EAP-SUCCESS)
     log "$IFACE: allow traffic from $MAC"
-    logexec tc filter replace dev $IFACE ingress pref 9000 protocol all flower src_mac $MAC action ok
+    logexec tc filter replace dev "$IFACE" ingress pref 9000 protocol all flower src_mac "$MAC" action ok
     # TODO: Bring up all associated VFs
     ;;
 AP-STA-DISCONNECTED | CTRL-EVENT-EAP-FAILURE)
     log "$IFACE: disallow traffic from $MAC"
     # TODO: Take down all associated VFs
-    logexec tc filter del dev $IFACE ingress pref 9000 protocol all flower
+    logexec tc filter del dev "$IFACE" ingress pref 9000 protocol all flower
     ;;
 *)
     log "$IFACE: ignoring event $EVENT"

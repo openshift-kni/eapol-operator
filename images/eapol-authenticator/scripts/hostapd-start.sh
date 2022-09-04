@@ -7,7 +7,7 @@
 # but must have one config file provided for each interface.  So we just repeat
 # the same config for each interface.
 CONFIGS=()
-for iface in ${IFACES//,/ }; do
-    CONFIGS+=($CONFIG)
+for _ in ${IFACES//,/ }; do
+    CONFIGS+=("$CONFIG")
 done
 exec /sbin/hostapd -i "$IFACES" "${CONFIGS[@]}"
