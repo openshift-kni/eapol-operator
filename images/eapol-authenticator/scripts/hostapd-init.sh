@@ -3,6 +3,8 @@
 # Initialize the interfaces defined in the HostAPD config file
 #
 
+set -e
+
 export UNPROTECTED_TCP_PORTS UNPROTECTED_UDP_PORTS
 
 echo "Initializing interfaces $IFACES"
