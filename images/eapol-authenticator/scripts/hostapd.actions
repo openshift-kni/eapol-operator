@@ -8,8 +8,6 @@ IFACE=$1
 EVENT=$2
 MAC=$3
 
-set -e
-
 log() {
     echo "[hostapd.actions] $*"
 }
@@ -19,45 +17,131 @@ logexec() {
     "$@"
 }
 
+isPf() {
+    local iface=$1
+    local sysbase=/sys/class/net/$iface
+    if [[ ! -e $sysbase ]]; then
+        return 1
+    fi
+    # A PF is any interface whose device doesn't point at a 'physfn' parent:
+    [[ ! -e $sysbase/device/physfn ]]
+}
+
+# Return the given iface (if it exists), and any associated VF netdevices (if present)
+vfs() {
+    local iface=$1
+    local -n devnames=$2
+    local sysbase=/sys/class/net/$iface
+    devnames=()
+    if [[ ! -e $sysbase ]]; then
+        return 1
+    fi
+    devnames+=("$iface")
+    shopt -s nullglob
+    for vfdev in "${sysbase}"/device/virtfn*; do
+        for vfpath in "$vfdev"/net/*; do
+            devnames+=("$(basename "$vfpath")")
+        done
+    done
+    shopt -u nullglob
+}
+
+# Run a command for the base iface and any associated vf netdevices
+foreachVf() {
+    local iface=$1; shift
+    local cmd=$1; shift
+    local -a ifacelist
+    vfs "$iface" ifacelist
+    if [[ ${#ifacelist[*]} -eq 0 ]]; then
+        log "$ifname: device not found"
+        return 1
+    fi
+    log "Calling $cmd $* for [${ifacelist[*]}]"
+    local -a err
+    for ifname in "${ifacelist[@]}"; do
+        log "-- $ifname --"
+        if ! "$cmd" "$ifname" "$@"; then
+            err+=("$ifname")
+        fi
+    done
+    if [[ ${#err[@]} -gt 0 ]]; then
+        log "Failures detected for: ${err[*]}"
+        return 1
+    fi
+}
+
 unprotectPorts() {
+    local iface=$1; shift
     local proto=$1; shift
     local ports=("$@")
+    local -a err
     if [[ ${#ports[@]} -gt 0 ]]; then
-        log "$IFACE: allowing unprotected $proto ports ${ports[*]}"
+        log "$iface: allowing unprotected $proto ports ${ports[*]}"
         for port in "${ports[@]}"; do
-            logexec tc filter add dev "$IFACE" ingress pref 9999 protocol ip u32 match "$proto" dst "$port" 0xffff action ok index 99
+            if ! logexec tc filter add dev "$iface" ingress pref 9999 protocol ip u32 match "$proto" dst "$port" 0xffff action ok index 99; then
+                err+=("$port")
+            fi
             # Need to figure out what to do for ipv6, as tc doesn't support it!
         done
+        if [[ ${#err[@]} -gt 0 ]]; then
+            log "$iface: Could not open $proto ports: ${err[*]}"
+            return 1
+        fi
     fi
+}
+
+# Initialize an interface, by denying all traffic exept EAPOL traffic
+initIface() {
+    local iface=$1
+    log "$iface: restricting traffic"
+    # Best effort: reset qdisc ingress and clsact
+    logexec tc qdisc del dev "$iface" ingress >/dev/null 2>&1 || true
+    logexec tc qdisc del dev "$iface" clsact >/dev/null 2>&1 || true
+    # Initialize the interface's qdisc and filters
+    logexec tc qdisc add dev "$iface" clsact || return $?
+    # Default rule: drop
+    logexec tc filter add dev "$iface" ingress pref 10001 protocol all matchall action drop index 101 || return $?
+    # Allow EAPOL traffic, for PFs only
+    if isPf "$iface"; then
+        log "$iface: allowing EAPOL packets"
+        logexec tc filter add dev "$iface" ingress pref 10000 protocol 0x888e matchall action ok index 100 || return $?
+        # Allow any explicitly allowed ports, if defined:
+        # TODO: Should this be for VFs too? Or configurable?
+        read -ra tcpPorts <<<"$UNPROTECTED_TCP_PORTS"
+        read -ra udpPorts <<<"$UNPROTECTED_UDP_PORTS"
+        unprotectPorts "$iface" "tcp" "${tcpPorts[@]}" || return $?
+        unprotectPorts "$iface" "udp" "${udpPorts[@]}" || return $?
+    fi
+}
+
+# Disallow all traffic from the specific MAC address on the given iface
+allow() {
+    local iface=$1
+    local mac=$2
+    log "$iface: allow traffic from $mac"
+    logexec tc filter replace dev "$iface" ingress pref 9000 protocol all flower src_mac "$mac" action ok
+}
+
+# Disallow all traffic on the given iface
+deny() {
+    local iface=$1
+    local mac=$2
+    log "$iface: disallow traffic from $mac"
+    logexec tc filter del dev "$iface" ingress pref 9000 protocol all flower
 }
 
 case ${EVENT:-NOTANEVENT} in
 __INIT__)
-    log "$IFACE: restricting all traffic except EAPOL"
-    # Best effort: reset qdisc ingress and clsact
-    logexec tc qdisc del dev "$IFACE" ingress >/dev/null 2>&1 || true
-    logexec tc qdisc del dev "$IFACE" clsact >/dev/null 2>&1 || true
-    # Initialize the interface's qdisc and filters
-    logexec tc qdisc add dev "$IFACE" clsact
-    logexec tc filter add dev "$IFACE" ingress pref 10000 protocol 0x888e matchall action ok index 100
-    logexec tc filter add dev "$IFACE" ingress pref 10001 protocol all matchall action drop index 101
-    # TODO: Also make sure all associated VFs are down
-    read -ra tcpPorts <<<"$UNPROTECTED_TCP_PORTS"
-    read -ra udpPorts <<<"$UNPROTECTED_UDP_PORTS"
-    unprotectPorts "tcp" "${tcpPorts[@]}"
-    unprotectPorts "udp" "${udpPorts[@]}"
+    foreachVf "$IFACE" initIface
     ;;
 AP-STA-CONNECTED | CTRL-EVENT-EAP-SUCCESS)
-    log "$IFACE: allow traffic from $MAC"
-    logexec tc filter replace dev "$IFACE" ingress pref 9000 protocol all flower src_mac "$MAC" action ok
-    # TODO: Bring up all associated VFs
+    foreachVf "$IFACE" allow "$MAC"
     ;;
 AP-STA-DISCONNECTED | CTRL-EVENT-EAP-FAILURE)
-    log "$IFACE: disallow traffic from $MAC"
-    # TODO: Take down all associated VFs
-    logexec tc filter del dev "$IFACE" ingress pref 9000 protocol all flower
+    foreachVf "$IFACE" deny "$MAC"
     ;;
 *)
     log "$IFACE: ignoring event $EVENT"
     ;;
 esac
+exit $?
