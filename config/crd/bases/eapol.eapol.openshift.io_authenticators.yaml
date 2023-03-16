@@ -138,7 +138,6 @@ spec:
                 type: object
             required:
             - authentication
-            - enabled
             - interfaces
             type: object
           status:

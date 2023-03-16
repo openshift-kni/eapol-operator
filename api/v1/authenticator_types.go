@@ -30,6 +30,7 @@ type AuthenticatorSpec struct {
 
 	// Enabled controls whether this authenticator is enabled or disabled
 	// +kubebuilder:default=true
+	// +optional
 	Enabled bool `json:"enabled"`
 
 	// Interfaces is the list of interfaces to protect under this authenticator instance
