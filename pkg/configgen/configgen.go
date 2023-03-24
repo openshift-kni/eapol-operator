@@ -45,7 +45,7 @@ const (
 	disabledReason    = "Disabled_via_config"
 	mainCommand       = "/bin/hostapd-start.sh"
 	initCommand       = "/bin/hostapd-init.sh"
-	cliCommand        = "/bin/hostapd-cli.sh"
+	monitorCommand    = "/bin/hostapd-monitor"
 )
 
 /* Defaults to avoid excessive reconciliations: */
@@ -209,6 +209,17 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 								Name:  "CONFIG",
 								Value: fmt.Sprintf("%s/%s", configMountPath, configFile),
 							}}),
+						container("hostapd-monitor", monitorCommand,
+							[]corev1.EnvVar{{
+								Name:  "IFACES",
+								Value: ifaces,
+							}, {
+								Name:  "UNPROTECTED_TCP_PORTS",
+								Value: unprotectedTcpList,
+							}, {
+								Name:  "UNPROTECTED_UDP_PORTS",
+								Value: unprotectedUdpList,
+							}}),
 					},
 					Volumes: []corev1.Volume{{
 						Name: configVolumeName,
@@ -248,21 +259,6 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 		},
 	}
 
-	for _, iface := range g.a11r.Spec.Interfaces {
-		ds.Spec.Template.Spec.Containers = append(ds.Spec.Template.Spec.Containers,
-			container(fmt.Sprintf("monitor-%s", iface), cliCommand,
-				[]corev1.EnvVar{{
-					Name:  "IFACE",
-					Value: iface,
-				}, {
-					Name:  "UNPROTECTED_TCP_PORTS",
-					Value: unprotectedTcpList,
-				}, {
-					Name:  "UNPROTECTED_UDP_PORTS",
-					Value: unprotectedUdpList,
-				}}),
-		)
-	}
 	return ds
 }
 

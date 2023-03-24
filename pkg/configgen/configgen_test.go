@@ -69,17 +69,14 @@ var _ = Describe("Daemonset", func() {
 		ds := cfggen.Daemonset()
 		Expect(ds.Spec.Template.Spec.Containers).To(ContainElements(
 			MatchFields(IgnoreExtras, Fields{
-				"Name": Equal("monitor-iface1"),
+				"Name": Equal("hostapd-monitor"),
 			}),
 		))
 		cfggen.a11r.Spec.Interfaces = []string{"iface2", "iface3"}
 		ds = cfggen.Daemonset()
 		Expect(ds.Spec.Template.Spec.Containers).To(ContainElements(
 			MatchFields(IgnoreExtras, Fields{
-				"Name": Equal("monitor-iface2"),
-			}),
-			MatchFields(IgnoreExtras, Fields{
-				"Name": Equal("monitor-iface3"),
+				"Name": Equal("hostapd-monitor"),
 			}),
 		))
 	})
