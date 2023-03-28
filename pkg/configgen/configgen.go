@@ -154,7 +154,7 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 			Command: []string{command},
 			Env:     env,
 			/* Defaults to avoid excessive reconciliations: */
-			ImagePullPolicy:          "Always",
+			ImagePullPolicy:          corev1.PullIfNotPresent,
 			TerminationMessagePath:   "/dev/termination-log",
 			TerminationMessagePolicy: "File",
 			/* -------------------------------------------- */
