@@ -75,6 +75,29 @@ type Local struct {
 	// If the key is not specified, it is assumed to be "hostapd.eap_user"
 	// +optional
 	UserFileSecret *SecretKeyRef `json:"userFileSecret,omitempty"`
+	// CaCertSecret secret reference containing certificate authority for hostapd daemon.
+	// If the key is not specified, it is assumed to be "1x-ca.pem"
+	// +optional
+	CaCertSecret *SecretKeyRef `json:"caCertSecret,omitempty"`
+	// ServerCertSecret secret reference containing server certificate for hostapd daemon.
+	// If the key is not specified, it is assumed to be "1x-hostapd.example.com.pem"
+	// +optional
+	ServerCertSecret *SecretKeyRef `json:"serverCertSecret,omitempty"`
+	// PrivateKeySecret secret reference containing private key for hostapd daemon server certificate.
+	// If the key is not specified, it is assumed to be "1x-hostapd.example.com.key"
+	// +optional
+	PrivateKeySecret *SecretKeyRef `json:"privateKeySecret,omitempty"`
+	// PrivateKeyPassphrase containing passphrase for the private key.
+	// +optional
+	PrivateKeyPassphrase string `json:"privateKeyPassphrase,omitempty"`
+	// RadiusClientSecret secret reference containing client information for local radius server.
+	// If the key is not specified, it is assumed to be "hostapd.radius_clients"
+	// +optional
+	RadiusClientSecret *SecretKeyRef `json:"radiusClientFileSecret,omitempty"`
+	// AuthPort UDP listening port Local Radius authentication server.
+	// +kubebuilder:default=1812
+	// +optional
+	AuthPort int `json:"authPort"`
 }
 
 // Radius represents a RADIUS server configuration

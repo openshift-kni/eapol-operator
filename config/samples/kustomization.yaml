@@ -6,6 +6,10 @@ secretGenerator:
 - name: localauth
   files:
   - hostapd.eap_user
+  - hostapd.radius_clients
+  - certs/1x-ca.pem
+  - certs/1x-hostapd.example.com.key
+  - certs/1x-hostapd.example.com.pem
 
 configurations:
 - kustomizeconfig/authenticator.yaml

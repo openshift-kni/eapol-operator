@@ -36,6 +36,10 @@ const (
 	appId             = "authenticator.eapol"
 	configFile        = "hostapd.conf"
 	userFile          = "hostapd.eap_user"
+	caFile            = "1x-ca.pem"
+	certFile          = "1x-hostapd.example.com.pem"
+	privateKeyFile    = "1x-hostapd.example.com.key"
+	radiusClientFile  = "hostapd.radius_clients"
 	configMountPath   = "/config"
 	configVolumeName  = "config-volume"
 	socketsMountPath  = "/var/run/hostapd"
@@ -130,6 +134,8 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 			},
 		})
 	}
+	projectedConfigVolumes = g.appendCertVolume(projectedConfigVolumes)
+	projectedConfigVolumes = g.appendRadiusClientVolume(projectedConfigVolumes)
 	image := g.a11r.Spec.Image
 	if image == "" {
 		image = defaultImage
@@ -260,6 +266,82 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 	}
 
 	return ds
+}
+
+func (g *ConfigGenerator) appendCertVolume(volumes []corev1.VolumeProjection) []corev1.VolumeProjection {
+	if g.a11r.Spec.Authentication.Local != nil && g.a11r.Spec.Authentication.Local.CaCertSecret != nil {
+		caSecretKey := g.a11r.Spec.Authentication.Local.CaCertSecret.Key
+		if caSecretKey == "" {
+			caSecretKey = caFile
+		}
+		volumes = append(volumes, corev1.VolumeProjection{
+			Secret: &corev1.SecretProjection{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: g.a11r.Spec.Authentication.Local.CaCertSecret.Name,
+				},
+				Items: []corev1.KeyToPath{{
+					Key:  caSecretKey,
+					Path: caFile,
+				}},
+			},
+		})
+	}
+	if g.a11r.Spec.Authentication.Local != nil && g.a11r.Spec.Authentication.Local.ServerCertSecret != nil {
+		certSecretKey := g.a11r.Spec.Authentication.Local.ServerCertSecret.Key
+		if certSecretKey == "" {
+			certSecretKey = certFile
+		}
+		volumes = append(volumes, corev1.VolumeProjection{
+			Secret: &corev1.SecretProjection{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: g.a11r.Spec.Authentication.Local.ServerCertSecret.Name,
+				},
+				Items: []corev1.KeyToPath{{
+					Key:  certSecretKey,
+					Path: certFile,
+				}},
+			},
+		})
+	}
+	if g.a11r.Spec.Authentication.Local != nil && g.a11r.Spec.Authentication.Local.PrivateKeySecret != nil {
+		privateKeySecretKey := g.a11r.Spec.Authentication.Local.PrivateKeySecret.Key
+		if privateKeySecretKey == "" {
+			privateKeySecretKey = privateKeyFile
+		}
+		volumes = append(volumes, corev1.VolumeProjection{
+			Secret: &corev1.SecretProjection{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: g.a11r.Spec.Authentication.Local.PrivateKeySecret.Name,
+				},
+				Items: []corev1.KeyToPath{{
+					Key:  privateKeySecretKey,
+					Path: privateKeyFile,
+				}},
+			},
+		})
+	}
+	return volumes
+}
+
+func (g *ConfigGenerator) appendRadiusClientVolume(volumes []corev1.VolumeProjection) []corev1.VolumeProjection {
+	if g.a11r.Spec.Authentication.Local != nil && g.a11r.Spec.Authentication.Local.RadiusClientSecret != nil {
+		radiusClientSecretKey := g.a11r.Spec.Authentication.Local.RadiusClientSecret.Key
+		if radiusClientSecretKey == "" {
+			radiusClientSecretKey = radiusClientFile
+		}
+		volumes = append(volumes, corev1.VolumeProjection{
+			Secret: &corev1.SecretProjection{
+				LocalObjectReference: corev1.LocalObjectReference{
+					Name: g.a11r.Spec.Authentication.Local.RadiusClientSecret.Name,
+				},
+				Items: []corev1.KeyToPath{{
+					Key:  radiusClientSecretKey,
+					Path: radiusClientFile,
+				}},
+			},
+		})
+	}
+	return volumes
 }
 
 func (g *ConfigGenerator) parsePorts() (string, string) {

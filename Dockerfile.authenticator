@@ -1,5 +1,5 @@
 # Build the monitor binary
-FROM docker.io/golang:1.19.5 AS builder
+FROM docker.io/golang:1.20.2 AS builder
 
 
 WORKDIR /workspace
@@ -21,7 +21,7 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o hostapd-monitor
 # Use centos image to package hostapd scripts and monitor binaries
 FROM quay.io/centos/centos:stream8
 
-RUN dnf install -y hostapd iproute-tc
+RUN dnf install -y hostapd iproute-tc net-tools
 RUN dnf clean all
 
 COPY images/eapol-authenticator/scripts/* /bin/
