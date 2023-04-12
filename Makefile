@@ -160,7 +160,7 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 .PHONY: controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
-	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.8.0)
+	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.11.1)
 
 KUSTOMIZE = $(shell pwd)/bin/kustomize
 .PHONY: kustomize
@@ -244,7 +244,7 @@ catalog-push: ## Push a catalog image.
 
 .PHONY: authenticator-build
 authenticator-build: ## Build the authenticator image.
-	docker build -f ./images/eapol-authenticator/Dockerfile -t $(AUTHENTICATOR_IMG) ./images/eapol-authenticator/
+	docker build -f Dockerfile.authenticator -t $(AUTHENTICATOR_IMG) .
 
 .PHONY: authenticator-push
 authenticator-push: ## Push the authenticator image.

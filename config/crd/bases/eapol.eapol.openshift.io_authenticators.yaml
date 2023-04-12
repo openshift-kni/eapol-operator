@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.8.0
+    controller-gen.kubebuilder.io/version: v0.11.1
   creationTimestamp: null
   name: authenticators.eapol.eapol.openshift.io
 spec:
@@ -44,6 +44,71 @@ spec:
                     description: Local configures the local internal authentication
                       server
                     properties:
+                      authPort:
+                        default: 1812
+                        description: AuthPort UDP listening port Local Radius authentication
+                          server.
+                        type: integer
+                      caCertSecret:
+                        description: CaCertSecret secret reference containing certificate
+                          authority for hostapd daemon. If the key is not specified,
+                          it is assumed to be "1x-ca.pem"
+                        properties:
+                          key:
+                            description: Key is the key in the secret to refer to
+                            type: string
+                          name:
+                            description: Name is the name of the secret to reference
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      privateKeyPassphrase:
+                        description: PrivateKeyPassphrase containing passphrase for
+                          the private key.
+                        type: string
+                      privateKeySecret:
+                        description: PrivateKeySecret secret reference containing
+                          private key for hostapd daemon server certificate. If the
+                          key is not specified, it is assumed to be "1x-hostapd.example.com.key"
+                        properties:
+                          key:
+                            description: Key is the key in the secret to refer to
+                            type: string
+                          name:
+                            description: Name is the name of the secret to reference
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      radiusClientFileSecret:
+                        description: RadiusClientSecret secret reference containing
+                          client information for local radius server. If the key is
+                          not specified, it is assumed to be "hostapd.radius_clients"
+                        properties:
+                          key:
+                            description: Key is the key in the secret to refer to
+                            type: string
+                          name:
+                            description: Name is the name of the secret to reference
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      serverCertSecret:
+                        description: ServerCertSecret secret reference containing
+                          server certificate for hostapd daemon. If the key is not
+                          specified, it is assumed to be "1x-hostapd.example.com.pem"
+                        properties:
+                          key:
+                            description: Key is the key in the secret to refer to
+                            type: string
+                          name:
+                            description: Name is the name of the secret to reference
+                            type: string
+                        required:
+                        - name
+                        type: object
                       userFileSecret:
                         description: UserFileSecret configures the local authentication
                           user file based on a secret contents. If the key is not
@@ -148,9 +213,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

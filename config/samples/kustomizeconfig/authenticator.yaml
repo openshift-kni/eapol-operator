@@ -3,3 +3,11 @@ nameReference:
   fieldSpecs:
   - path: spec/authentication/local/userFileSecret/name
     kind: Authenticator
+  - path: spec/authentication/local/caCertSecret/name
+    kind: Authenticator
+  - path: spec/authentication/local/serverCertSecret/name
+    kind: Authenticator
+  - path: spec/authentication/local/privateKeySecret/name
+    kind: Authenticator
+  - path: spec/authentication/local/radiusClientFileSecret/name
+    kind: Authenticator

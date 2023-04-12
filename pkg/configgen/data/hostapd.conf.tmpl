@@ -36,21 +36,33 @@ eap_server=1
 eap_user_file=/config/hostapd.eap_user
 {{- end }}
 
+{{ if .CaCertSecret -}}
 # CA certificate (PEM or DER file) for EAP-TLS/PEAP/TTLS
-#ca_cert=/etc/hostapd.ca.pem
+ca_cert=/config/1x-ca.pem
+{{- end }}
 
+{{ if .ServerCertSecret -}}
 # Server certificate (PEM or DER file) for EAP-TLS/PEAP/TTLS
-#server_cert=/etc/hostapd.server.pem
+server_cert=/config/1x-hostapd.example.com.pem
+{{- end }}
 
+{{ if .PrivateKeySecret -}}
 # Private key matching with the server certificate for EAP-TLS/PEAP/TTLS
 # This may point to the same file as server_cert if both certificate and key
 # are included in a single file. PKCS#12 (PFX) file (.p12/.pfx) can also be
 # used by commenting out server_cert and specifying the PFX file as the
 # private_key.
-#private_key=/etc/hostapd.server.prv
+private_key=/config/1x-hostapd.example.com.key
 
 # Passphrase for private key
-#private_key_passwd=secret passphrase
+private_key_passwd={{ .PrivateKeyPassphrase }}
+{{- end }}
+
+{{ if .RadiusClientSecret -}}
+# Local Radius server configuration
+radius_server_clients=/config/hostapd.radius_clients
+radius_server_auth_port={{ .AuthPort }}
+{{- end }}
 
 # An alternative server certificate and private key can be configured with the
 # following parameters (with values just like the parameters above without the

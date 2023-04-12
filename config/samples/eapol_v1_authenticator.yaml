@@ -8,3 +8,12 @@ spec:
     local:
       userFileSecret:
         name: "localauth"
+      caCertSecret:
+        name: "localauth"
+      serverCertSecret:
+        name: "localauth"
+      privateKeySecret:
+        name: "localauth"
+      privateKeyPassphrase: "Hsecret"
+      radiusClientFileSecret:
+        name: "localauth"
