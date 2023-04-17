@@ -22,19 +22,24 @@ import (
 	"os"
 	"os/signal"
 	"runtime"
+	"strconv"
 	"strings"
 	"syscall"
 
+	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
 	"github.com/openshift-kni/eapol-operator/internal/logging"
+	"github.com/openshift-kni/eapol-operator/internal/trafficcontrol"
 	"github.com/openshift-kni/eapol-operator/pkg/hostap"
 	"github.com/openshift-kni/eapol-operator/pkg/netlink"
 )
 
 func main() {
 	var (
-		interfaces = flag.String("interfaces", os.Getenv("IFACES"), "Interfaces on which hostapd to listen on")
-		logLevel   = flag.String("log-level", "info", fmt.Sprintf("log level. must be one of: [%s]", logging.Levels.String()))
+		interfaces          = flag.String("interfaces", os.Getenv("IFACES"), "Interfaces on which hostapd to listen on")
+		unprotectedTcpPorts = flag.String("unprotected-tcp-ports", os.Getenv("UNPROTECTED_TCP_PORTS"), "list of unprotected tcp ports")
+		unprotectedUdpPorts = flag.String("unprotected-udp-ports", os.Getenv("UNPROTECTED_UDP_PORTS"), "list of unprotected udp ports")
+		logLevel            = flag.String("log-level", "info", fmt.Sprintf("log level. must be one of: [%s]", logging.Levels.String()))
 	)
 	flag.Parse()
 
@@ -48,6 +53,18 @@ func main() {
 		level.Error(logger).Log("op", "startup", "error", "IFACES env variable must be set", "msg", "missing configuration")
 		os.Exit(1)
 	}
+	ifaces := parseStringsArgs(interfaces)
+
+	allowedTcpPorts, err := parseIntArgs(unprotectedTcpPorts)
+	if err != nil {
+		level.Error(logger).Log("op", "startup", "error", "UNPROTECTED_TCP_PORTS env variable must be set properly", "msg", "incorrect configuration")
+		os.Exit(1)
+	}
+	allowedUdpPorts, err := parseIntArgs(unprotectedUdpPorts)
+	if err != nil {
+		level.Error(logger).Log("op", "startup", "error", "UNPROTECTED_UDP_PORTS env variable must be set properly", "msg", "incorrect configuration")
+		os.Exit(1)
+	}
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM,
@@ -59,11 +76,17 @@ func main() {
 		runtime.GOMAXPROCS(runtime.NumCPU())
 	}
 
+	err = initInterfaces(logger, ifaces, allowedTcpPorts, allowedUdpPorts)
+	if err != nil {
+		level.Error(logger).Log("op", "startup", "init", "interface", "error", err)
+		os.Exit(1)
+	}
+
 	ifEventHandler := netlink.LinkEventHandler{Logger: logger}
 	ifEventHandler.Start()
 
 	var monitors []*hostap.InterfaceMonitor
-	for _, intf := range strings.Split(*interfaces, ",") {
+	for _, intf := range ifaces {
 		level.Info(logger).Log("op", "startup", "monitor start for interface", intf)
 		intfMonitor := &hostap.InterfaceMonitor{Logger: logger, IfName: intf,
 			IfEventHandler: ifEventHandler}
@@ -87,5 +110,53 @@ func main() {
 		monitor.StopMonitor()
 	}
 	ifEventHandler.StopHandler()
+
 	level.Info(logger).Log("op", "shutdown", "msg", "done")
+}
+
+func initInterfaces(logger log.Logger, interfaces []string, unprotectedTcpPorts, unprotectedUdpPorts []int) error {
+	if interfaces == nil {
+		return nil
+	}
+	for _, iface := range interfaces {
+		pfvfs, err := trafficcontrol.GetAssociatedInterfaces(iface)
+		if err != nil {
+			return err
+		}
+		for _, linkName := range pfvfs {
+			err = trafficcontrol.InitInterfaceForEAPTraffic(logger, linkName, unprotectedTcpPorts, unprotectedUdpPorts)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func parseIntArgs(arg *string) ([]int, error) {
+	var argSlice []int
+	if arg == nil || *arg == "" {
+		return argSlice, nil
+	}
+	strSlice := parseStringsArgs(arg)
+	for _, str := range strSlice {
+		port, err := strconv.Atoi(str)
+		if err != nil {
+			return nil, err
+		}
+		argSlice = append(argSlice, port)
+	}
+	return argSlice, nil
+}
+
+func parseStringsArgs(arg *string) []string {
+	var argSlice []string
+	if arg == nil || *arg == "" {
+		return argSlice
+	}
+	argStr := strings.Split(*arg, ",")
+	for _, arg := range argStr {
+		argSlice = append(argSlice, strings.TrimSpace(arg))
+	}
+	return argSlice
 }

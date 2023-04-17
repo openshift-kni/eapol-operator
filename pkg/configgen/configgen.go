@@ -48,7 +48,6 @@ const (
 	disabledSelector  = "no-node"
 	disabledReason    = "Disabled_via_config"
 	mainCommand       = "/bin/hostapd-start.sh"
-	initCommand       = "/bin/hostapd-init.sh"
 	monitorCommand    = "/bin/hostapd-monitor"
 )
 
@@ -187,19 +186,6 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 				Spec: corev1.PodSpec{
 					NodeSelector: nodeSelector,
 					HostNetwork:  true,
-					InitContainers: []corev1.Container{
-						container("iface-init", initCommand,
-							[]corev1.EnvVar{{
-								Name:  "IFACES",
-								Value: ifaces,
-							}, {
-								Name:  "UNPROTECTED_TCP_PORTS",
-								Value: unprotectedTcpList,
-							}, {
-								Name:  "UNPROTECTED_UDP_PORTS",
-								Value: unprotectedUdpList,
-							}}),
-					},
 					Containers: []corev1.Container{
 						container("hostapd", mainCommand,
 							[]corev1.EnvVar{{
