@@ -3,7 +3,7 @@ kind: Authenticator
 metadata:
   name: authenticator-sample
 spec:
-  interfaces: [ "eth0" ]
+  interfaces: [ "enp0s10" ]
   authentication:
     local:
       userFileSecret:

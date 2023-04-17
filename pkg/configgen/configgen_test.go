@@ -14,7 +14,7 @@ import (
 var _ = Describe("Daemonset", func() {
 	var cfggen *ConfigGenerator
 	BeforeEach(func() {
-		cfggen = New(NewA11r())
+		cfggen = New(NewA11r(), "")
 	})
 	It("should generate a DaemonSet with the right name", func() {
 		ds := cfggen.Daemonset()
@@ -117,7 +117,7 @@ var _ = Describe("Daemonset", func() {
 var _ = Describe("parsePorts", func() {
 	var cfggen *ConfigGenerator
 	BeforeEach(func() {
-		cfggen = New(NewA11r())
+		cfggen = New(NewA11r(), "")
 	})
 	It("should produce empty results if no TrafficControl provided", func() {
 		tcp, udp := cfggen.parsePorts()
@@ -154,7 +154,7 @@ var _ = Describe("parsePorts", func() {
 var _ = Describe("ConfigMap", func() {
 	var cfggen *ConfigGenerator
 	BeforeEach(func() {
-		cfggen = New(NewA11r())
+		cfggen = New(NewA11r(), "")
 	})
 	It("should create a ConfigMap with the right name", func() {
 		cm, err := cfggen.ConfigMap()

@@ -18,13 +18,6 @@ import (
 	. "github.com/openshift-kni/eapol-operator/internal/testutils"
 )
 
-func makeReconciler() *AuthenticatorReconciler {
-	return &AuthenticatorReconciler{
-		Client: k8sClient,
-		Scheme: k8sClient.Scheme(),
-	}
-}
-
 func BeOwnedBy(obj metav1.Object) types.GomegaMatcher {
 	return MatchFields(IgnoreExtras, Fields{
 		"ObjectMeta": MatchFields(IgnoreExtras, Fields{
@@ -50,6 +43,10 @@ var _ = Describe("Reconcile", func() {
 			Name:      a11r.Name,
 			Namespace: a11r.Namespace,
 		}
+		k8sClient.Delete(ctx, a11r)
+		Eventually(func() bool {
+			return errors.IsNotFound(k8sClient.Get(ctx, key, a11r))
+		}, timeout, interval).Should(BeTrue())
 		Expect(k8sClient.Create(ctx, a11r)).To(Succeed())
 		a11r = &eapolv1.Authenticator{}
 		Eventually(func() error {

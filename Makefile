@@ -42,7 +42,7 @@ BUNDLE_GEN_FLAGS ?= -q --overwrite --version $(VERSION) $(BUNDLE_METADATA_OPTS)
 AUTHENTICATOR_IMAGE_BASE ?= quay.io/openshift-kni/eapol-authenticator
 
 # AUTHENTICATOR_IMG defines the image:tag used for the authenticator container image.
-AUTHENTICATOR_IMG ?= $(AUTHENTICATOR_IMAGE_BASE):v$(VERSION)
+AUTHENTICATOR_IMG ?= $(AUTHENTICATOR_IMAGE_BASE):latest
 
 # USE_IMAGE_DIGESTS defines if images are resolved via tags or digests
 # You can enable this value if you would like to use SHA Based Digests
