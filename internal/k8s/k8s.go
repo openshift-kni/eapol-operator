@@ -25,9 +25,13 @@ import (
 
 	eapolv1 "github.com/openshift-kni/eapol-operator/api/v1"
 	"github.com/openshift-kni/eapol-operator/pkg/configgen"
+	kapi "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/kubernetes"
+	typedcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -36,13 +40,30 @@ func GetClient() (client.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	scheme := runtime.NewScheme()
-	if err := eapolv1.AddToScheme(scheme); err != nil {
+	scheme, err := getScheme()
+	if err != nil {
 		return nil, err
 	}
 	return client.New(config, client.Options{
 		Scheme: scheme,
 	})
+}
+
+// EventRecorder returns an EventRecorder type that can be
+// used to post Events for Authenticator CR.
+func EventRecorder() (record.EventRecorder, error) {
+	kubeClient, err := getClient()
+	if err != nil {
+		return nil, err
+	}
+	eventBroadcaster := record.NewBroadcaster()
+	eventBroadcaster.StartRecordingToSink(&typedcorev1.EventSinkImpl{Interface: kubeClient.CoreV1().Events("")})
+	scheme, err := getScheme()
+	if err != nil {
+		return nil, err
+	}
+	return eventBroadcaster.NewRecorder(scheme,
+		kapi.EventSource{Component: "authenticator"}), nil
 }
 
 func GetAuthNamespacedName() (*types.NamespacedName, error) {
@@ -80,4 +101,25 @@ func GetAuthNamespacedName() (*types.NamespacedName, error) {
 		return nil, errors.New("no authentication object found from labels")
 	}
 	return &types.NamespacedName{Namespace: authNs, Name: authName}, nil
+}
+
+// getClient returns a k8s clientset to the request from inside of cluster
+func getClient() (kubernetes.Interface, error) {
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return nil, err
+	}
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	return clientset, nil
+}
+
+func getScheme() (*runtime.Scheme, error) {
+	scheme := runtime.NewScheme()
+	if err := eapolv1.AddToScheme(scheme); err != nil {
+		return nil, err
+	}
+	return scheme, nil
 }

@@ -88,6 +88,11 @@ func main() {
 		level.Error(logger).Log("op", "startup", "k8s", "retrieve client", "error", err)
 		os.Exit(1)
 	}
+	eventRecorder, err := k8s.EventRecorder()
+	if err != nil {
+		level.Error(logger).Log("op", "startup", "k8s", "retrieve event recorder", "error", err)
+		os.Exit(1)
+	}
 
 	err = initInterfaces(logger, ifaces, allowedTcpPorts, allowedUdpPorts)
 	if err != nil {
@@ -105,6 +110,7 @@ func main() {
 			intfMonitor.Client = k8Client
 			intfMonitor.AuthNsName = authObjKey
 			intfMonitor.IfEventHandler = ifEventHandler
+			intfMonitor.Recorder = eventRecorder
 		})
 		err = intfMonitor.StartMonitor()
 		if err != nil {

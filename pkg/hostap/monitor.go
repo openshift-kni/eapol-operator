@@ -30,12 +30,14 @@ import (
 	"github.com/go-kit/log"
 	"github.com/vishvananda/netlink"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 
 	"github.com/go-kit/log/level"
 	eapolv1 "github.com/openshift-kni/eapol-operator/api/v1"
 	"github.com/openshift-kni/eapol-operator/internal/trafficcontrol"
 	hostapif "github.com/openshift-kni/eapol-operator/pkg/netlink"
+	kapi "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -64,6 +66,7 @@ type Opts func(intfMonitor *InterfaceMonitor)
 type InterfaceMonitor struct {
 	Logger             log.Logger
 	Client             client.Client
+	Recorder           record.EventRecorder
 	AuthNsName         *types.NamespacedName
 	IfName             string
 	IfEventHandler     hostapif.LinkEventHandler
@@ -175,9 +178,13 @@ func (m *InterfaceMonitor) handleHostapdEvent(eventStr string) error {
 	eventKeyStr := eventStrSlice[0][strings.Index(eventStrSlice[0], ">")+1:]
 	switch eventKeyStr {
 	case staConnectedEvent, eapSuccessEvent:
+		m.logEvent(kapi.EventTypeNormal, "authenticated supplicant %s", eventStrSlice[1])
 		return m.handleAuthenticateEvent(eventStrSlice[1])
-	case staDisconnectedEvent, eapFailureEvent:
+	case staDisconnectedEvent:
+		m.logEvent(kapi.EventTypeNormal, "deauthenticated supplicant %s", eventStrSlice[1])
 		return m.handleDeAuthenticateEvent(eventStrSlice[1])
+	case eapFailureEvent:
+		m.logEvent(kapi.EventTypeWarning, "authentication failure for supplicant %s", eventStrSlice[1])
 	default:
 		level.Info(m.Logger).Log("hostapd-event", "unhandled event", m.IfName, eventStr)
 	}
@@ -245,10 +252,12 @@ func (m *InterfaceMonitor) handleIfEvents() {
 					}
 					m.deauthRequests[addr] = getCurrentTimestamp()
 				}
+				m.logEvent(kapi.EventTypeWarning, "interface is down")
 			} else if newOpState == netlink.OperUp {
 				for addr := range m.authenticatedAddrs {
 					delete(m.deauthRequests, addr)
 				}
+				m.logEvent(kapi.EventTypeNormal, "interface is up")
 			}
 			level.Info(m.Logger).Log("interface", m.IfName, "handleIfEvents", m.deauthRequests)
 			m.addrMutex.Unlock()
@@ -317,8 +326,7 @@ func (m *InterfaceMonitor) updateInterfaceStatus() error {
 	m.addrMutex.Lock()
 	defer m.addrMutex.Unlock()
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		authObj := &eapolv1.Authenticator{}
-		err := m.Client.Get(context.Background(), *m.AuthNsName, authObj)
+		authObj, err := m.getAuthObject()
 		if err != nil {
 			return err
 		}
@@ -340,6 +348,23 @@ func (m *InterfaceMonitor) updateInterfaceStatus() error {
 		}
 		return m.Client.Status().Update(context.Background(), authObj, &client.UpdateOptions{})
 	})
+}
+
+func (m *InterfaceMonitor) logEvent(eventType, messageFmt string, args ...interface{}) {
+	authObj, err := m.getAuthObject()
+	if err != nil {
+		level.Error(m.Logger).Log("record-event", "error recording event", m.IfName, err)
+	}
+	m.Recorder.Eventf(authObj, eventType, m.IfName, messageFmt, args...)
+}
+
+func (m *InterfaceMonitor) getAuthObject() (*eapolv1.Authenticator, error) {
+	authObj := &eapolv1.Authenticator{}
+	err := m.Client.Get(context.Background(), *m.AuthNsName, authObj)
+	if err != nil {
+		return nil, err
+	}
+	return authObj, nil
 }
 
 func NewInterfaceMonitor(logger log.Logger, ifName string, opts ...Opts) *InterfaceMonitor {
