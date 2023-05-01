@@ -28,6 +28,7 @@ import (
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
+	"github.com/openshift-kni/eapol-operator/internal/k8s"
 	"github.com/openshift-kni/eapol-operator/internal/logging"
 	"github.com/openshift-kni/eapol-operator/internal/trafficcontrol"
 	"github.com/openshift-kni/eapol-operator/pkg/hostap"
@@ -65,6 +66,12 @@ func main() {
 		level.Error(logger).Log("op", "startup", "error", "UNPROTECTED_UDP_PORTS env variable must be set properly", "msg", "incorrect configuration")
 		os.Exit(1)
 	}
+	authObjKey, err := k8s.GetAuthNamespacedName()
+	if err != nil {
+		level.Error(logger).Log("op", "startup", "auth", "retrieval failed", "error", err)
+		os.Exit(1)
+	}
+	level.Info(logger).Log("op", "startup", "authObjKey", authObjKey)
 
 	sigs := make(chan os.Signal, 1)
 	signal.Notify(sigs, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM,
@@ -74,6 +81,17 @@ func main() {
 	goMaxProcs := os.Getenv("GOMAXPROCS")
 	if goMaxProcs == "" {
 		runtime.GOMAXPROCS(runtime.NumCPU())
+	}
+
+	k8Client, err := k8s.GetClient()
+	if err != nil {
+		level.Error(logger).Log("op", "startup", "k8s", "retrieve client", "error", err)
+		os.Exit(1)
+	}
+	eventRecorder, err := k8s.EventRecorder()
+	if err != nil {
+		level.Error(logger).Log("op", "startup", "k8s", "retrieve event recorder", "error", err)
+		os.Exit(1)
 	}
 
 	err = initInterfaces(logger, ifaces, allowedTcpPorts, allowedUdpPorts)
@@ -88,8 +106,12 @@ func main() {
 	var monitors []*hostap.InterfaceMonitor
 	for _, intf := range ifaces {
 		level.Info(logger).Log("op", "startup", "monitor start for interface", intf)
-		intfMonitor := &hostap.InterfaceMonitor{Logger: logger, IfName: intf,
-			IfEventHandler: ifEventHandler}
+		intfMonitor := hostap.NewInterfaceMonitor(logger, intf, func(intfMonitor *hostap.InterfaceMonitor) {
+			intfMonitor.Client = k8Client
+			intfMonitor.AuthNsName = authObjKey
+			intfMonitor.IfEventHandler = ifEventHandler
+			intfMonitor.Recorder = eventRecorder
+		})
 		err = intfMonitor.StartMonitor()
 		if err != nil {
 			level.Error(logger).Log("op", "startup", "start monitor on interface failed", intf, "error", err)

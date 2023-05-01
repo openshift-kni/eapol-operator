@@ -14,6 +14,7 @@ RUN go mod download
 COPY monitor/*.go ./
 COPY internal internal
 COPY pkg pkg
+COPY api api
 
 # Build
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o hostapd-monitor

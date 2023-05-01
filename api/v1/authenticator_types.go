@@ -20,6 +20,19 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type IfState string
+
+var (
+	IfStateUninitialized IfState = "Uninitialized"
+	IfStateDisabled      IfState = "Disabled"
+	IfStateCountryUpdate IfState = "CountryUpdate"
+	IfStateAcs           IfState = "ACS"
+	IfStateHtScan        IfState = "HT Scan"
+	IfStateDfs           IfState = "DFS"
+	IfStateEnabled       IfState = "Enabled"
+	IfStateUnknown       IfState = "Unknown"
+)
+
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
@@ -150,6 +163,21 @@ type Ports struct {
 type AuthenticatorStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// Interfaces is the list of interface status
+	// +optional
+	Interfaces []*Interface `json:"interfaces,omitempty"`
+}
+
+type Interface struct {
+	// Name is the name of the interface
+	Name string `json:"name"`
+	// State is the state of the interface. The possible states are Uninitialized,
+	// Disabled, CountryUpdate, ACS, HT Scan, DFS, Enabled or Unknown.
+	State IfState `json:"status"`
+	// AuthenticatedClients is the list of authenticated stations on the interface
+	// +optional
+	AuthenticatedClients []string `json:"authenticatedClients"`
 }
 
 //+kubebuilder:object:root=true

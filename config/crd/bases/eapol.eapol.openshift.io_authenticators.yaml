@@ -207,6 +207,30 @@ spec:
             type: object
           status:
             description: AuthenticatorStatus defines the observed state of Authenticator
+            properties:
+              interfaces:
+                description: Interfaces is the list of interface status
+                items:
+                  properties:
+                    authenticatedClients:
+                      description: AuthenticatedClients is the list of authenticated
+                        stations on the interface
+                      items:
+                        type: string
+                      type: array
+                    name:
+                      description: Name is the name of the interface
+                      type: string
+                    status:
+                      description: State is the state of the interface. The possible
+                        states are Uninitialized, Disabled, CountryUpdate, ACS, HT
+                        Scan, DFS, Enabled or Unknown.
+                      type: string
+                  required:
+                  - name
+                  - status
+                  type: object
+                type: array
             type: object
         type: object
     served: true

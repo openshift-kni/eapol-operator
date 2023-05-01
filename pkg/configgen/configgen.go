@@ -33,22 +33,26 @@ import (
 )
 
 const (
-	appId             = "authenticator.eapol"
-	configFile        = "hostapd.conf"
-	userFile          = "hostapd.eap_user"
-	caFile            = "1x-ca.pem"
-	certFile          = "1x-hostapd.example.com.pem"
-	privateKeyFile    = "1x-hostapd.example.com.key"
-	radiusClientFile  = "hostapd.radius_clients"
-	configMountPath   = "/config"
-	configVolumeName  = "config-volume"
-	socketsMountPath  = "/var/run/hostapd"
-	socketsVolumeName = "sockets-volume"
-	defaultImage      = "quay.io/openshift-kni/eapol-authenticator:latest"
-	disabledSelector  = "no-node"
-	disabledReason    = "Disabled_via_config"
-	mainCommand       = "/bin/hostapd-start.sh"
-	monitorCommand    = "/bin/hostapd-monitor"
+	AppId                   = "authenticator.eapol"
+	AuthNamespace           = "authenticator-namespace"
+	AuthName                = "authenticator-name"
+	AuthenticatorMountPath  = "/config/auth"
+	configFile              = "hostapd.conf"
+	userFile                = "hostapd.eap_user"
+	caFile                  = "1x-ca.pem"
+	certFile                = "1x-hostapd.example.com.pem"
+	privateKeyFile          = "1x-hostapd.example.com.key"
+	radiusClientFile        = "hostapd.radius_clients"
+	configMountPath         = "/config"
+	configVolumeName        = "config-volume"
+	socketsMountPath        = "/var/run/hostapd"
+	socketsVolumeName       = "sockets-volume"
+	authenticatorVolumeName = "authenticator-volume"
+	defaultImage            = "quay.io/openshift-kni/eapol-authenticator:latest"
+	disabledSelector        = "no-node"
+	disabledReason          = "Disabled_via_config"
+	mainCommand             = "/bin/hostapd-start.sh"
+	monitorCommand          = "/bin/hostapd-monitor"
 )
 
 /* Defaults to avoid excessive reconciliations: */
@@ -61,12 +65,14 @@ var maxUnavailable = intstr.FromInt(1)
 /* -------------------------------------------- */
 
 type ConfigGenerator struct {
-	a11r *eapolv1.Authenticator
+	a11r           *eapolv1.Authenticator
+	serviceAccount string
 }
 
-func New(a11r *eapolv1.Authenticator) *ConfigGenerator {
+func New(a11r *eapolv1.Authenticator, serviceAccount string) *ConfigGenerator {
 	return &ConfigGenerator{
-		a11r: a11r,
+		a11r:           a11r,
+		serviceAccount: serviceAccount,
 	}
 }
 
@@ -104,7 +110,8 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 		// Daemonsets do not scale, so use an unsatisfiable node selector
 		nodeSelector[disabledSelector] = disabledReason
 	}
-	ls := map[string]string{"app": appId, appId: g.a11r.Name}
+	ls := map[string]string{"app": AppId, AuthNamespace: g.a11r.Namespace,
+		AuthName: g.a11r.Name}
 	projectedConfigVolumes := []corev1.VolumeProjection{{
 		ConfigMap: &corev1.ConfigMapProjection{
 			LocalObjectReference: corev1.LocalObjectReference{
@@ -150,6 +157,9 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 			}, {
 				Name:      socketsVolumeName,
 				MountPath: socketsMountPath,
+			}, {
+				Name:      authenticatorVolumeName,
+				MountPath: AuthenticatorMountPath,
 			}},
 			SecurityContext: &corev1.SecurityContext{
 				Capabilities: &corev1.Capabilities{
@@ -174,6 +184,7 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      g.a11r.Name,
 			Namespace: g.a11r.Namespace,
+			Labels:    ls,
 		},
 		Spec: appsv1.DaemonSetSpec{
 			Selector: &metav1.LabelSelector{
@@ -184,8 +195,9 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 					Labels: ls,
 				},
 				Spec: corev1.PodSpec{
-					NodeSelector: nodeSelector,
-					HostNetwork:  true,
+					NodeSelector:       nodeSelector,
+					HostNetwork:        true,
+					ServiceAccountName: g.serviceAccount,
 					Containers: []corev1.Container{
 						container("hostapd", mainCommand,
 							[]corev1.EnvVar{{
@@ -228,6 +240,11 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 						VolumeSource: corev1.VolumeSource{
 							EmptyDir: &corev1.EmptyDirVolumeSource{},
 						},
+					}, {
+						Name: authenticatorVolumeName,
+						VolumeSource: corev1.VolumeSource{DownwardAPI: &corev1.DownwardAPIVolumeSource{
+							Items: []corev1.DownwardAPIVolumeFile{{Path: "labels",
+								FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.labels"}}}}},
 					}},
 					/* Defaults to avoid excessive reconciliations: */
 					RestartPolicy:                 "Always",
