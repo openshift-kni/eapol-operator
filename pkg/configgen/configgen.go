@@ -223,6 +223,9 @@ func (g *ConfigGenerator) Daemonset() *appsv1.DaemonSet {
 							}, {
 								Name:  "UNPROTECTED_UDP_PORTS",
 								Value: unprotectedUdpList,
+							}, {
+								Name:      "AUTHENTICATOR_HOST",
+								ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "status.hostIP"}},
 							}}),
 					},
 					Volumes: []corev1.Volume{{
