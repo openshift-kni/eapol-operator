@@ -177,14 +177,18 @@ func (m *InterfaceMonitor) handleHostapdEvent(eventStr string) error {
 	}()
 	eventKeyStr := eventStrSlice[0][strings.Index(eventStrSlice[0], ">")+1:]
 	switch eventKeyStr {
-	case staConnectedEvent, eapSuccessEvent:
-		m.logEvent(kapi.EventTypeNormal, "authenticated supplicant %s", eventStrSlice[1])
+	case staConnectedEvent:
 		return m.handleAuthenticateEvent(eventStrSlice[1])
+	case eapSuccessEvent:
+		m.logEvent(kapi.EventTypeNormal, "authenticated supplicant %s", eventStrSlice[1])
+		stats.Authenticated(m.IfName)
 	case staDisconnectedEvent:
 		m.logEvent(kapi.EventTypeNormal, "deauthenticated supplicant %s", eventStrSlice[1])
+		stats.DeAuthenticated(m.IfName)
 		return m.handleDeAuthenticateEvent(eventStrSlice[1])
 	case eapFailureEvent:
 		m.logEvent(kapi.EventTypeWarning, "authentication failure for supplicant %s", eventStrSlice[1])
+		stats.AuthFailed(m.IfName)
 	default:
 		level.Info(m.Logger).Log("hostapd-event", "unhandled event", m.IfName, eventStr)
 	}

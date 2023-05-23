@@ -19,12 +19,16 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net"
+	"net/http"
+	"net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
@@ -33,6 +37,7 @@ import (
 	"github.com/openshift-kni/eapol-operator/internal/trafficcontrol"
 	"github.com/openshift-kni/eapol-operator/pkg/hostap"
 	"github.com/openshift-kni/eapol-operator/pkg/netlink"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -41,6 +46,9 @@ func main() {
 		unprotectedTcpPorts = flag.String("unprotected-tcp-ports", os.Getenv("UNPROTECTED_TCP_PORTS"), "list of unprotected tcp ports")
 		unprotectedUdpPorts = flag.String("unprotected-udp-ports", os.Getenv("UNPROTECTED_UDP_PORTS"), "list of unprotected udp ports")
 		logLevel            = flag.String("log-level", "info", fmt.Sprintf("log level. must be one of: [%s]", logging.Levels.String()))
+		host                = flag.String("host", os.Getenv("AUTHENTICATOR_HOST"), "HTTP host address")
+		port                = flag.Int("port", 7472, "HTTP listening port")
+		enablePprof         = flag.Bool("enable-pprof", false, "Enable pprof profiling")
 	)
 	flag.Parse()
 
@@ -93,6 +101,14 @@ func main() {
 		level.Error(logger).Log("op", "startup", "k8s", "retrieve event recorder", "error", err)
 		os.Exit(1)
 	}
+
+	// register prometheus http handler
+	go func() {
+		err = registerPromHandler(*host, *port, *enablePprof)
+		if err != nil {
+			level.Error(logger).Log("op", "startup", "prometheus", "register", "error", err)
+		}
+	}()
 
 	err = initInterfaces(logger, ifaces, allowedTcpPorts, allowedUdpPorts)
 	if err != nil {
@@ -153,6 +169,24 @@ func initInterfaces(logger log.Logger, interfaces []string, unprotectedTcpPorts,
 		}
 	}
 	return nil
+}
+
+func registerPromHandler(host string, port int, enablePprof bool) error {
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", promhttp.Handler())
+	if enablePprof {
+		mux.HandleFunc("/debug/pprof/", pprof.Index)
+		mux.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+		mux.HandleFunc("/debug/pprof/profile", pprof.Profile)
+		mux.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+		mux.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	}
+	server := &http.Server{
+		Addr:              net.JoinHostPort(host, fmt.Sprint(port)),
+		Handler:           mux,
+		ReadHeaderTimeout: 3 * time.Second,
+	}
+	return server.ListenAndServe()
 }
 
 func parseIntArgs(arg *string) ([]int, error) {
