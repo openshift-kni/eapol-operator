@@ -149,6 +149,11 @@ func main() {
 	}
 	ifEventHandler.StopHandler()
 
+	err = resetInterfaces(logger, ifaces)
+	if err != nil {
+		level.Error(logger).Log("op", "shutdown", "reset", "interfaces", "error", err)
+	}
+
 	level.Info(logger).Log("op", "shutdown", "msg", "done")
 }
 
@@ -187,6 +192,25 @@ func registerPromHandler(host string, port int, enablePprof bool) error {
 		ReadHeaderTimeout: 3 * time.Second,
 	}
 	return server.ListenAndServe()
+}
+
+func resetInterfaces(logger log.Logger, interfaces []string) error {
+	if interfaces == nil {
+		return nil
+	}
+	for _, iface := range interfaces {
+		pfvfs, err := trafficcontrol.GetAssociatedInterfaces(iface)
+		if err != nil {
+			return err
+		}
+		for _, linkName := range pfvfs {
+			err = trafficcontrol.ResetInterface(logger, linkName)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 func parseIntArgs(arg *string) ([]int, error) {

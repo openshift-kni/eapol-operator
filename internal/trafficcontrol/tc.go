@@ -72,21 +72,11 @@ func DenyTrafficFromMac(ifName string, macAddress string) error {
 }
 
 func InitInterfaceForEAPTraffic(logger log.Logger, ifName string, unprotectTcpPorts, unprotectUdpPorts []int) error {
-	if _, err := exec.LookPath("tc"); err != nil {
+	if err := ResetInterface(logger, ifName); err != nil {
 		return err
 	}
-	cmd := exec.Command("bash", "-c", fmt.Sprintf("tc qdisc del dev %s ingress >/dev/null 2>&1 || true", ifName))
+	cmd := exec.Command("bash", "-c", fmt.Sprintf("tc qdisc add dev %s clsact || return $?", ifName))
 	err := cmd.Run()
-	if err != nil {
-		return err
-	}
-	cmd = exec.Command("bash", "-c", fmt.Sprintf("tc qdisc del dev %s clsact >/dev/null 2>&1 || true", ifName))
-	err = cmd.Run()
-	if err != nil {
-		return err
-	}
-	cmd = exec.Command("bash", "-c", fmt.Sprintf("tc qdisc add dev %s clsact || return $?", ifName))
-	err = cmd.Run()
 	if err != nil {
 		return err
 	}
@@ -116,6 +106,19 @@ func InitInterfaceForEAPTraffic(logger log.Logger, ifName string, unprotectTcpPo
 		}
 	}
 	return nil
+}
+
+func ResetInterface(logger log.Logger, ifName string) error {
+	if _, err := exec.LookPath("tc"); err != nil {
+		return err
+	}
+	cmd := exec.Command("bash", "-c", fmt.Sprintf("tc qdisc del dev %s ingress >/dev/null 2>&1 || true", ifName))
+	err := cmd.Run()
+	if err != nil {
+		return err
+	}
+	cmd = exec.Command("bash", "-c", fmt.Sprintf("tc qdisc del dev %s clsact >/dev/null 2>&1 || true", ifName))
+	return cmd.Run()
 }
 
 func UnprotectPorts(logger log.Logger, ifName string, protocol string, ports []int) error {
