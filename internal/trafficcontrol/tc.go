@@ -105,6 +105,13 @@ func InitInterfaceForEAPTraffic(logger log.Logger, ifName string, unprotectTcpPo
 			return err
 		}
 	}
+	unprotectPorts := append(unprotectTcpPorts, unprotectUdpPorts...)
+	if len(unprotectPorts) > 0 {
+		err = UnprotectIPv6Ports(logger, ifName, unprotectPorts)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -131,7 +138,20 @@ func UnprotectPorts(logger log.Logger, ifName string, protocol string, ports []i
 		if err != nil {
 			level.Error(logger).Log("op", "tc filter add", "ifName", ifName, "protocol", protocol, "port", port, "error", err)
 		}
-		// TODO: Need to figure out what to do for ipv6, as tc doesn't support it!
+	}
+	return nil
+}
+
+func UnprotectIPv6Ports(logger log.Logger, ifName string, ports []int) error {
+	if _, err := exec.LookPath("tc"); err != nil {
+		return err
+	}
+	for _, port := range ports {
+		cmd := exec.Command("bash", "-c", fmt.Sprintf("tc filter add dev %s ingress pref 9999 protocol ipv6 u32 match ip6 dport %s 0xffff action ok index 100", ifName, strconv.Itoa(port)))
+		err := cmd.Run()
+		if err != nil {
+			level.Error(logger).Log("op", "tc filter add", "ifName", ifName, "protocol", "ipv6", "port", port, "error", err)
+		}
 	}
 	return nil
 }
