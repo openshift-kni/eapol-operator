@@ -159,6 +159,7 @@ func (r *AuthenticatorReconciler) syncRbacResources(ctx context.Context, owner *
 	_, err := r.getServiceAccount(ctx, namespace)
 	if errors.IsNotFound(err) {
 		r.rbacResources.serviceAccount.Namespace = namespace
+		r.rbacResources.serviceAccount.ResourceVersion = ""
 		err = r.createOwned(ctx, owner, r.rbacResources.serviceAccount)
 		if err != nil {
 			return fmt.Errorf("error creating authenticator service account: %v, err: %v",
@@ -170,6 +171,7 @@ func (r *AuthenticatorReconciler) syncRbacResources(ctx context.Context, owner *
 	_, err = r.getRole(ctx, namespace)
 	if errors.IsNotFound(err) {
 		r.rbacResources.role.Namespace = namespace
+		r.rbacResources.role.ResourceVersion = ""
 		err = r.createOwned(ctx, owner, r.rbacResources.role)
 		if err != nil {
 			return fmt.Errorf("error creating authenticator role: %v, err: %v",
@@ -181,6 +183,7 @@ func (r *AuthenticatorReconciler) syncRbacResources(ctx context.Context, owner *
 	_, err = r.getRoleBinding(ctx, namespace)
 	if errors.IsNotFound(err) {
 		r.rbacResources.roleBinding.Namespace = namespace
+		r.rbacResources.roleBinding.ResourceVersion = ""
 		r.rbacResources.roleBinding.Subjects[0].Namespace = namespace
 		err = r.createOwned(ctx, owner, r.rbacResources.roleBinding)
 		if err != nil {

@@ -14,5 +14,5 @@ configMapGenerator:
 
 images:
 - name: controller
-  newName: controller
+  newName: quay.io/openshift-kni/controller
   newTag: latest
