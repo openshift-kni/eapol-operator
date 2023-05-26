@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: wpa-client
+spec:
+  hostNetwork: true
+  containers:
+  - name: wpa-container
+    image:  quay.io/pepalani/wpa-supplicant:latest
+    imagePullPolicy: IfNotPresent
+    securityContext:
+      capabilities:
+        add: ["NET_RAW"]
+    command: [ "/bin/bash", "-c", "--" ]
+    args: [ "while true; do sleep 300000; done;" ]
