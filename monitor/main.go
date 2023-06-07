@@ -163,6 +163,7 @@ func initInterfaces(logger log.Logger, interfaces []string, unprotectedTcpPorts,
 	}
 	for _, iface := range interfaces {
 		pfvfs, err := trafficcontrol.GetAssociatedInterfaces(iface)
+		level.Info(logger).Log("op", "initInterfaces", "pfvfs", pfvfs)
 		if err != nil {
 			return err
 		}

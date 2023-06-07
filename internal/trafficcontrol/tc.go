@@ -179,20 +179,23 @@ func GetSriovVFs(ifName string) ([]string, error) {
 		return nil, err
 	}
 	for _, vfDir := range vfsDir {
-		vfDirInfo, err := ioutil.ReadDir(vfDir)
+		vfNetDir := filepath.Join(vfDir, "net")
+		vfNetDirInfo, err := ioutil.ReadDir(vfNetDir)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read vf directory %s: %q", vfDir, err)
+			return nil, fmt.Errorf("failed to read vf net directory %s: %q", vfNetDir, err)
 		}
-		vfLink, err := netlink.LinkByName(vfDirInfo[0].Name())
+		vfIfName := vfNetDirInfo[0].Name()
+		vfLink, err := netlink.LinkByName(vfIfName)
 		if err != nil {
-			vfNames = append(vfNames, vfLink.Attrs().Name)
+			return nil, fmt.Errorf("failed to get netlink %s: %q", vfIfName, err)
 		}
+		vfNames = append(vfNames, vfLink.Attrs().Name)
 	}
 	return vfNames, nil
 }
 
 func IsSriovPF(ifName string) bool {
-	ifPfDir := filepath.Join(sysClassNet, ifName, "device", "physfn")
+	ifPfDir := filepath.Join(sysClassNet, ifName, "device", "sriov_numvfs")
 	if _, err := os.Stat(ifPfDir); err != nil {
 		return false
 	}
