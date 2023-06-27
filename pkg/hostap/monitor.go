@@ -64,21 +64,21 @@ var (
 type Opts func(intfMonitor *InterfaceMonitor)
 
 type InterfaceMonitor struct {
-	Logger             log.Logger
-	Client             client.Client
-	Recorder           record.EventRecorder
-	AuthNsName         *types.NamespacedName
-	IfName             string
-	IfEventHandler     hostapif.LinkEventHandler
-	ifEventCh          chan netlink.LinkUpdate
-	hostApdConn        net.Conn
-	authenticatedAddrs map[string]interface{}
-	deauthRequests     map[string]int64
-	addrMutex          sync.Mutex
-	stopWg             sync.WaitGroup
-	stop               chan interface{}
-	operState          netlink.LinkOperState
-	ifEAPState         eapolv1.IfState
+	Logger         log.Logger
+	Client         client.Client
+	Recorder       record.EventRecorder
+	AuthNsName     *types.NamespacedName
+	IfName         string
+	PfInfo         *trafficcontrol.PFInfo
+	IfEventHandler hostapif.LinkEventHandler
+	ifEventCh      chan netlink.LinkUpdate
+	hostApdConn    net.Conn
+	deauthRequests map[string]int64
+	addrMutex      sync.Mutex
+	stopWg         sync.WaitGroup
+	stop           chan interface{}
+	operState      netlink.LinkOperState
+	ifEAPState     eapolv1.IfState
 }
 
 func (m *InterfaceMonitor) StartMonitor() error {
@@ -93,12 +93,20 @@ func (m *InterfaceMonitor) StartMonitor() error {
 		return err
 	}
 	m.hostApdConn = conn
-	m.authenticatedAddrs = make(map[string]interface{})
 	m.stop = make(chan interface{})
 	m.stopWg.Add(4)
 	m.deauthRequests = make(map[string]int64)
 	m.ifEventCh = make(chan netlink.LinkUpdate)
-	m.IfEventHandler.Subscribe(m.IfName, m.ifEventCh)
+	pfInfo, err := trafficcontrol.GetSriovPFInfo(m.IfName)
+	if err != nil {
+		return err
+	}
+	err = pfInfo.ConfigureVlanStateForVFs()
+	if err != nil {
+		return err
+	}
+	m.PfInfo = pfInfo
+	m.IfEventHandler.Subscribe(m.ifEventCh, m.IfName)
 	go m.handleHostapdReply()
 	go m.handleIfEvents()
 	go m.sendKeepAlive()
@@ -117,6 +125,13 @@ func (m *InterfaceMonitor) StartMonitor() error {
 }
 
 func (m *InterfaceMonitor) StopMonitor() {
+	if m.PfInfo != nil && !m.PfInfo.Authenticated {
+		m.PfInfo.Authenticated = true
+		err := m.PfInfo.ConfigureVlanStateForVFs()
+		if err != nil {
+			level.Error(m.Logger).Log("error resoring vf state and vlan configuration", m.IfName, "error", err)
+		}
+	}
 	close(m.stop)
 	m.IfEventHandler.Unsubscribe(m.IfName)
 	err := m.hostApdConn.Close()
@@ -240,34 +255,46 @@ func (m *InterfaceMonitor) handleIfEvents() {
 			close(m.ifEventCh)
 			return
 		case linkUpdateEvent := <-m.ifEventCh:
-			newOpState := linkUpdateEvent.Link.Attrs().OperState
-			if newOpState == m.operState {
-				level.Info(m.Logger).Log("interface", "event", m.IfName, "op state not changed", m.operState)
-				continue
+			if linkUpdateEvent.Link.Attrs().OperState != m.operState {
+				m.handlePfEventForOpStateChange(linkUpdateEvent)
 			}
-			m.operState = newOpState
-			level.Info(m.Logger).Log("interface", "event", m.IfName, "op state changed", m.operState)
-			m.addrMutex.Lock()
-			if newOpState == netlink.OperDown {
-				for addr := range m.authenticatedAddrs {
-					err := m.deauthenticate(addr)
-					if err != nil {
-						level.Error(m.Logger).Log("interface", "addr", m.IfName, addr, "error deauthenticating addr", err)
-					}
-					m.deauthRequests[addr] = getCurrentTimestamp()
-				}
-				m.logEvent(kapi.EventTypeWarning, "interface is down")
-			} else if newOpState == netlink.OperUp {
-				for addr := range m.authenticatedAddrs {
-					delete(m.deauthRequests, addr)
-				}
-				m.logEvent(kapi.EventTypeNormal, "interface is up")
-			}
-			level.Info(m.Logger).Log("interface", m.IfName, "handleIfEvents", m.deauthRequests)
-			m.addrMutex.Unlock()
-			m.writeCommand(statusCommand)
+			m.handlePfEventForVfVlanChange(linkUpdateEvent)
 		}
 	}
+}
+
+func (m *InterfaceMonitor) handlePfEventForVfVlanChange(linkUpdateEvent netlink.LinkUpdate) {
+	m.addrMutex.Lock()
+	defer m.addrMutex.Unlock()
+	err := m.PfInfo.HandlePfEventForVlanChange(m.Logger)
+	if err != nil {
+		level.Error(m.Logger).Log("error handling pf event", m.IfName, "event",
+			linkUpdateEvent, "error", err)
+	}
+}
+
+func (m *InterfaceMonitor) handlePfEventForOpStateChange(linkUpdateEvent netlink.LinkUpdate) {
+	m.operState = linkUpdateEvent.Link.Attrs().OperState
+	level.Info(m.Logger).Log("interface", "event", m.IfName, "op state changed", m.operState)
+	m.addrMutex.Lock()
+	if m.operState == netlink.OperDown {
+		for addr := range m.PfInfo.AuthenticatedAddrs {
+			err := m.deauthenticate(addr)
+			if err != nil {
+				level.Error(m.Logger).Log("interface", "addr", m.IfName, addr, "error deauthenticating addr", err)
+			}
+			m.deauthRequests[addr] = getCurrentTimestamp()
+		}
+		m.logEvent(kapi.EventTypeWarning, "interface is down")
+	} else if m.operState == netlink.OperUp {
+		for addr := range m.PfInfo.AuthenticatedAddrs {
+			delete(m.deauthRequests, addr)
+		}
+		m.logEvent(kapi.EventTypeNormal, "interface is up")
+	}
+	level.Info(m.Logger).Log("interface", m.IfName, "handleIfEvents", m.deauthRequests)
+	m.addrMutex.Unlock()
+	m.writeCommand(statusCommand)
 }
 
 func (m *InterfaceMonitor) handleRequestsTimeout() {
@@ -284,8 +311,8 @@ func (m *InterfaceMonitor) handleRequestsTimeout() {
 					// skip remaining requests for addr as they are not timed out as well.
 					break
 				}
-				delete(m.authenticatedAddrs, addr)
-				err := trafficcontrol.DenyTrafficFromMac(m.IfName, addr)
+				delete(m.PfInfo.AuthenticatedAddrs, addr)
+				err := trafficcontrol.DenyTrafficFromMac(m.PfInfo, addr)
 				if err != nil {
 					level.Error(m.Logger).Log("interface", "addr", m.IfName, addr, "error applying deny traffic", err)
 				}
@@ -313,17 +340,17 @@ func (m *InterfaceMonitor) writeCommand(command string) error {
 func (m *InterfaceMonitor) handleAuthenticateEvent(addr string) error {
 	m.addrMutex.Lock()
 	defer m.addrMutex.Unlock()
-	m.authenticatedAddrs[addr] = nil
+	m.PfInfo.AuthenticatedAddrs[addr] = nil
 	delete(m.deauthRequests, addr)
-	return trafficcontrol.AllowTrafficFromMac(m.IfName, addr)
+	return trafficcontrol.AllowTrafficFromMac(m.PfInfo, addr)
 }
 
 func (m *InterfaceMonitor) handleDeAuthenticateEvent(addr string) error {
 	m.addrMutex.Lock()
 	defer m.addrMutex.Unlock()
-	delete(m.authenticatedAddrs, addr)
+	delete(m.PfInfo.AuthenticatedAddrs, addr)
 	delete(m.deauthRequests, addr)
-	return trafficcontrol.DenyTrafficFromMac(m.IfName, addr)
+	return trafficcontrol.DenyTrafficFromMac(m.PfInfo, addr)
 }
 
 func (m *InterfaceMonitor) updateInterfaceStatus() error {
@@ -347,7 +374,7 @@ func (m *InterfaceMonitor) updateInterfaceStatus() error {
 		}
 		ifStatus.State = m.ifEAPState
 		ifStatus.AuthenticatedClients = []string{}
-		for sta := range m.authenticatedAddrs {
+		for sta := range m.PfInfo.AuthenticatedAddrs {
 			ifStatus.AuthenticatedClients = append(ifStatus.AuthenticatedClients, sta)
 		}
 		return m.Client.Status().Update(context.Background(), authObj, &client.UpdateOptions{})

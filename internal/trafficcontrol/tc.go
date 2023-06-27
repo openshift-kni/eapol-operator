@@ -18,15 +18,11 @@ package trafficcontrol
 
 import (
 	"fmt"
-	"io/ioutil"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strconv"
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
-	"github.com/vishvananda/netlink"
 )
 
 var (
@@ -35,11 +31,20 @@ var (
 	udpProtoStr = "udp"
 )
 
-func AllowTrafficFromMac(ifName string, macAddress string) error {
+func AllowTrafficFromMac(pf *PFInfo, macAddress string) error {
+	// Restore the original vlan and state on the VF when first client
+	// gets authenticated.
+	if len(pf.AuthenticatedAddrs) == 1 {
+		pf.Authenticated = true
+		err := pf.ConfigureVlanStateForVFs()
+		if err != nil {
+			return err
+		}
+	}
 	if _, err := exec.LookPath("tc"); err != nil {
 		return err
 	}
-	interfaces, err := GetAssociatedInterfaces(ifName)
+	interfaces, err := GetAssociatedInterfaces(pf.Name)
 	if err != nil {
 		return err
 	}
@@ -53,11 +58,20 @@ func AllowTrafficFromMac(ifName string, macAddress string) error {
 	return nil
 }
 
-func DenyTrafficFromMac(ifName string, macAddress string) error {
+func DenyTrafficFromMac(pf *PFInfo, macAddress string) error {
+	// When no clients authenticated on PF, then move its VFs into
+	// deauthenticated state.
+	if len(pf.AuthenticatedAddrs) == 0 {
+		pf.Authenticated = false
+		err := pf.ConfigureVlanStateForVFs()
+		if err != nil {
+			return err
+		}
+	}
 	if _, err := exec.LookPath("tc"); err != nil {
 		return err
 	}
-	interfaces, err := GetAssociatedInterfaces(ifName)
+	interfaces, err := GetAssociatedInterfaces(pf.Name)
 	if err != nil {
 		return err
 	}
@@ -154,50 +168,4 @@ func UnprotectIPv6Ports(logger log.Logger, ifName string, ports []int) error {
 		}
 	}
 	return nil
-}
-
-func GetAssociatedInterfaces(ifName string) ([]string, error) {
-	interfaces := []string{ifName}
-	if IsSriovPF(ifName) {
-		vfs, err := GetSriovVFs(ifName)
-		if err != nil {
-			return nil, err
-		}
-		interfaces = append(interfaces, vfs...)
-	}
-	return interfaces, nil
-}
-
-func GetSriovVFs(ifName string) ([]string, error) {
-	vfNames := []string{}
-	if !IsSriovPF(ifName) {
-		return nil, fmt.Errorf("interface %s is not a sriov pf type", ifName)
-	}
-	vfFnsDir := filepath.Join(sysClassNet, ifName, "device", "virtfn*")
-	vfsDir, err := filepath.Glob(vfFnsDir)
-	if err != nil {
-		return nil, err
-	}
-	for _, vfDir := range vfsDir {
-		vfNetDir := filepath.Join(vfDir, "net")
-		vfNetDirInfo, err := ioutil.ReadDir(vfNetDir)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read vf net directory %s: %q", vfNetDir, err)
-		}
-		vfIfName := vfNetDirInfo[0].Name()
-		vfLink, err := netlink.LinkByName(vfIfName)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get netlink %s: %q", vfIfName, err)
-		}
-		vfNames = append(vfNames, vfLink.Attrs().Name)
-	}
-	return vfNames, nil
-}
-
-func IsSriovPF(ifName string) bool {
-	ifPfDir := filepath.Join(sysClassNet, ifName, "device", "sriov_numvfs")
-	if _, err := os.Stat(ifPfDir); err != nil {
-		return false
-	}
-	return true
 }
