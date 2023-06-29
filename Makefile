@@ -64,6 +64,8 @@ else
 GOBIN=$(shell go env GOBIN)
 endif
 
+CONTAINER_ENGINE ?= podman
+
 # Setting SHELL to bash allows bash commands to be executed by recipes.
 # This is a requirement for 'setup-envtest.sh' in the test target.
 # Options are set to exit when a recipe line exits non-zero or a piped command fails.
@@ -128,11 +130,11 @@ run: manifests generate fmt vet ## Run a controller from your host.
 
 .PHONY: docker-build
 docker-build: test ## Build docker image with the manager.
-	docker build -t ${IMG} .
+	${CONTAINER_ENGINE} build -t ${IMG} .
 
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
-	docker push ${IMG}
+	${CONTAINER_ENGINE} push ${IMG}
 
 ##@ Deployment
 
@@ -195,7 +197,7 @@ bundle: manifests kustomize ## Generate bundle manifests and metadata, then vali
 
 .PHONY: bundle-build
 bundle-build: ## Build the bundle image.
-	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+	${CONTAINER_ENGINE} build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
 
 .PHONY: bundle-push
 bundle-push: ## Push the bundle image.
@@ -235,7 +237,7 @@ endif
 # https://github.com/operator-framework/community-operators/blob/7f1438c/docs/packaging-operator.md#updating-your-existing-operator
 .PHONY: catalog-build
 catalog-build: opm ## Build a catalog image.
-	$(OPM) index add --container-tool docker --mode semver --tag $(CATALOG_IMG) --bundles $(BUNDLE_IMGS) $(FROM_INDEX_OPT)
+	$(OPM) index add --container-tool ${CONTAINER_ENGINE} --mode semver --tag $(CATALOG_IMG) --bundles $(BUNDLE_IMGS) $(FROM_INDEX_OPT)
 
 # Push the catalog image.
 .PHONY: catalog-push
@@ -244,7 +246,7 @@ catalog-push: ## Push a catalog image.
 
 .PHONY: authenticator-build
 authenticator-build: ## Build the authenticator image.
-	docker build -f Dockerfile.authenticator -t $(AUTHENTICATOR_IMG) .
+	${CONTAINER_ENGINE} build -f Dockerfile.authenticator -t $(AUTHENTICATOR_IMG) .
 
 .PHONY: authenticator-push
 authenticator-push: ## Push the authenticator image.
