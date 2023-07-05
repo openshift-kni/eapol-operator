@@ -122,9 +122,17 @@ func GetSriovVFs(ifName string) ([]string, error) {
 	}
 	for _, vfDir := range vfsDir {
 		vfNetDir := filepath.Join(vfDir, "net")
+		// Skip the VF if it is already bound with dpdk driver.
+		if !dirExists(vfNetDir) {
+			continue
+		}
 		vfNetDirInfo, err := ioutil.ReadDir(vfNetDir)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read vf net directory %s: %q", vfNetDir, err)
+		}
+		// Skip the VF if it is alreay moved into another network namespace.
+		if len(vfNetDirInfo) == 0 {
+			continue
 		}
 		vfIfName := vfNetDirInfo[0].Name()
 		vfLink, err := netlink.LinkByName(vfIfName)
@@ -154,4 +162,9 @@ func GetAssociatedInterfaces(ifName string) ([]string, error) {
 		interfaces = append(interfaces, vfs...)
 	}
 	return interfaces, nil
+}
+
+func dirExists(dirname string) bool {
+	info, err := os.Stat(dirname)
+	return err == nil && info.IsDir()
 }
