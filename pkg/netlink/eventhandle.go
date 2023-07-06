@@ -43,20 +43,24 @@ func (l *LinkEventHandler) Start() {
 	level.Info(l.Logger).Log("monitor", "link monitor started")
 }
 
-func (l *LinkEventHandler) Subscribe(ifName string, eventChannel chan<- netlink.LinkUpdate) error {
+func (l *LinkEventHandler) Subscribe(eventChannel chan<- netlink.LinkUpdate, ifNames ...string) error {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 	if eventChannel == nil {
 		return errors.New("event channel can not be empty")
 	}
-	l.ifaceChannels[ifName] = eventChannel
+	for _, ifName := range ifNames {
+		l.ifaceChannels[ifName] = eventChannel
+	}
 	return nil
 }
 
-func (l *LinkEventHandler) Unsubscribe(ifName string) {
+func (l *LinkEventHandler) Unsubscribe(ifNames ...string) {
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
-	delete(l.ifaceChannels, ifName)
+	for _, ifName := range ifNames {
+		delete(l.ifaceChannels, ifName)
+	}
 }
 
 func (l *LinkEventHandler) StopHandler() {
@@ -89,8 +93,6 @@ func (l *LinkEventHandler) handleEvents() {
 			l.mutex.Lock()
 			if ch, ok := l.ifaceChannels[ifName]; ok {
 				ch <- linkUpdateEvent
-			} else {
-				level.Info(l.Logger).Log("link subscribe", "unsubscribed event", "ifname", ifName)
 			}
 			l.mutex.Unlock()
 		}
