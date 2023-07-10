@@ -377,7 +377,7 @@ func (m *InterfaceMonitor) updateInterfaceStatus() error {
 		for sta := range m.PfInfo.AuthenticatedAddrs {
 			ifStatus.AuthenticatedClients = append(ifStatus.AuthenticatedClients, sta)
 		}
-		return m.Client.Status().Update(context.Background(), authObj, &client.UpdateOptions{})
+		return m.Client.Status().Update(context.Background(), authObj, &client.SubResourceUpdateOptions{})
 	})
 }
 
