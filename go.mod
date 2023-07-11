@@ -15,7 +15,7 @@ require (
 	k8s.io/klog v1.0.0
 	sigs.k8s.io/controller-runtime v0.15.0
 	sigs.k8s.io/controller-runtime/tools/setup-envtest v0.0.0-20230707165103-87487d3539d7
-	sigs.k8s.io/controller-tools v0.11.0
+	sigs.k8s.io/controller-tools v0.11.1
 )
 
 require (
