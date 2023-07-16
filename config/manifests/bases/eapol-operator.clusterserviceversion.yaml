@@ -1,0 +1,53 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+  name: eapol-operator.v0.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: Authenticator is the Schema for the authenticators API
+      displayName: Authenticator
+      kind: Authenticator
+      name: authenticators.eapol.eapol.openshift.io
+      version: v1
+  description: An 802.1x authentication operator for Kubernetes
+  displayName: eapol-operator
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - networking
+  - security
+  links:
+  - name: Eapol Operator
+    url: https://eapol-operator.domain
+  maintainers:
+  - email: jramsay@redhat.com
+    name: Jim Ramsay
+  - email: ykashtan@redhat.com
+    name: Yuval Kashtan
+  - email: pepalani@redhat.com
+    name: Periyasamy Palanichamy
+  maturity: alpha
+  provider:
+    name: Red Hat
+    url: https://www.redhat.com
+  version: 0.0.0
