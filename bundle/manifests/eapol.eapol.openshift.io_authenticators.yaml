@@ -1,0 +1,244 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.11.1
+  creationTimestamp: null
+  name: authenticators.eapol.eapol.openshift.io
+spec:
+  group: eapol.eapol.openshift.io
+  names:
+    kind: Authenticator
+    listKind: AuthenticatorList
+    plural: authenticators
+    singular: authenticator
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: Authenticator is the Schema for the authenticators API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AuthenticatorSpec defines the desired state of a single authenticator
+              instance
+            properties:
+              authentication:
+                description: Authentication configures back-end authentication for
+                  this authenticator
+                properties:
+                  local:
+                    description: Local configures the local internal authentication
+                      server
+                    properties:
+                      authPort:
+                        default: 1812
+                        description: AuthPort UDP listening port Local Radius authentication
+                          server.
+                        type: integer
+                      caCertSecret:
+                        description: CaCertSecret secret reference containing certificate
+                          authority for hostapd daemon. If the key is not specified,
+                          it is assumed to be "1x-ca.pem"
+                        properties:
+                          key:
+                            description: Key is the key in the secret to refer to
+                            type: string
+                          name:
+                            description: Name is the name of the secret to reference
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      privateKeyPassphrase:
+                        description: PrivateKeyPassphrase containing passphrase for
+                          the private key.
+                        type: string
+                      privateKeySecret:
+                        description: PrivateKeySecret secret reference containing
+                          private key for hostapd daemon server certificate. If the
+                          key is not specified, it is assumed to be "1x-hostapd.example.com.key"
+                        properties:
+                          key:
+                            description: Key is the key in the secret to refer to
+                            type: string
+                          name:
+                            description: Name is the name of the secret to reference
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      radiusClientFileSecret:
+                        description: RadiusClientSecret secret reference containing
+                          client information for local radius server. If the key is
+                          not specified, it is assumed to be "hostapd.radius_clients"
+                        properties:
+                          key:
+                            description: Key is the key in the secret to refer to
+                            type: string
+                          name:
+                            description: Name is the name of the secret to reference
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      serverCertSecret:
+                        description: ServerCertSecret secret reference containing
+                          server certificate for hostapd daemon. If the key is not
+                          specified, it is assumed to be "1x-hostapd.example.com.pem"
+                        properties:
+                          key:
+                            description: Key is the key in the secret to refer to
+                            type: string
+                          name:
+                            description: Name is the name of the secret to reference
+                            type: string
+                        required:
+                        - name
+                        type: object
+                      userFileSecret:
+                        description: UserFileSecret configures the local authentication
+                          user file based on a secret contents. If the key is not
+                          specified, it is assumed to be "hostapd.eap_user"
+                        properties:
+                          key:
+                            description: Key is the key in the secret to refer to
+                            type: string
+                          name:
+                            description: Name is the name of the secret to reference
+                            type: string
+                        required:
+                        - name
+                        type: object
+                    type: object
+                  radius:
+                    description: Radius is the external RADIUS server configuration
+                      to use for authentication
+                    properties:
+                      authPort:
+                        description: AuthPort is the TCP Port of the RADIUS authentication
+                          server
+                        type: integer
+                      authSecret:
+                        description: AuthSecret is the name of the Secret that contains
+                          the RADIUS authentication server shared secret
+                        type: string
+                      authServer:
+                        description: AuthServer is the IP address or hostname of the
+                          RADIUS authentication server
+                        type: string
+                    required:
+                    - authPort
+                    - authSecret
+                    - authServer
+                    type: object
+                type: object
+              configuration:
+                description: Configuration contains various low-level EAP tunable
+                  values
+                properties:
+                  eapReauthPeriod:
+                    default: 3600
+                    description: 'EapReauthPeriod is the EAP reauthentication period
+                      in seconds (default: 3600 seconds; 0 = disable)'
+                    type: integer
+                required:
+                - eapReauthPeriod
+                type: object
+              enabled:
+                default: true
+                description: Enabled controls whether this authenticator is enabled
+                  or disabled
+                type: boolean
+              image:
+                description: Image optionally overrides the default eapol-authenticator
+                  container image
+                type: string
+              interfaces:
+                description: Interfaces is the list of interfaces to protect under
+                  this authenticator instance
+                items:
+                  type: string
+                type: array
+              nodeSelector:
+                additionalProperties:
+                  type: string
+                description: NodeSelector limits the nodes that the authenticator
+                  can run on
+                type: object
+              trafficControl:
+                description: TrafficControl configures the traffic allowed in and
+                  out when authenticated and not authenticated.  If unset, the default
+                  is to disallow all traffic until authenticated, and then allow all
+                  traffic.
+                properties:
+                  unprotectedPorts:
+                    description: UnprotectedPorts is a list of ingress destination
+                      ports to allow even for unathenticated interfaces
+                    properties:
+                      tcp:
+                        description: Tcp is a list of tcp ports
+                        items:
+                          type: integer
+                        type: array
+                      udp:
+                        description: Udp is a lits of udp ports
+                        items:
+                          type: integer
+                        type: array
+                    type: object
+                type: object
+            required:
+            - authentication
+            - interfaces
+            type: object
+          status:
+            description: AuthenticatorStatus defines the observed state of Authenticator
+            properties:
+              interfaces:
+                description: Interfaces is the list of interface status
+                items:
+                  properties:
+                    authenticatedClients:
+                      description: AuthenticatedClients is the list of authenticated
+                        stations on the interface
+                      items:
+                        type: string
+                      type: array
+                    name:
+                      description: Name is the name of the interface
+                      type: string
+                    status:
+                      description: State is the state of the interface. The possible
+                        states are Uninitialized, Disabled, CountryUpdate, ACS, HT
+                        Scan, DFS, Enabled or Unknown.
+                      type: string
+                  required:
+                  - name
+                  - status
+                  type: object
+                type: array
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+status:
+  acceptedNames:
+    kind: ""
+    plural: ""
+  conditions: null
+  storedVersions: null
