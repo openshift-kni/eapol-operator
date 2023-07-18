@@ -9,11 +9,13 @@ to a Kubernetes node directly, such as in the O-RAN LLS-C1 configuration.
 
 ## Installation
 
+The OLM bundle is published at
+[quay.io/openshift-kni/eapol-operator-bundle](https://eapol-operator-bundle)
+and should be installable by pointing OLM at the latest bundle image there.
+
 This operator was built with the [operator
 SDk](https://sdk.operatorframework.io/), and the `operator-sdk` tool can
 install and run this operator from the source tree.
-
-TODO: How to install from quay.io, once we get a bundle built there...
 
 ## Usage
 
