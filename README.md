@@ -81,3 +81,14 @@ For SR-IOV interfaces, this operator implements port-based control, and allows
 traffic to all VFs once an authentication occurs on the PF.
 
 MACSEC support is not currently implemented.
+
+## Building
+
+The container builder defaults to `podman`, but you can `export
+CONTAINER_ENGINE=docker` to use docker instead.
+
+Run `make docker-build` to build the main operator controller container.
+
+Run `make authenticator-build` to build the authenticator/monitor container.
+
+Run `make bundle-build` to build the OLM operator bundle container.
