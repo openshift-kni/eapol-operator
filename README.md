@@ -66,7 +66,7 @@ status:
       authenticatedClients: []
 ```
 
-The 'authenticatedClients' status lists the MAC addresses of any clients
+The `authenticatedClients` status lists the MAC addresses of any clients
 authenticated on the given interface.
 
 ## Architecture
@@ -87,8 +87,6 @@ MACSEC support is not currently implemented.
 The container builder defaults to `podman`, but you can `export
 CONTAINER_ENGINE=docker` to use docker instead.
 
-Run `make docker-build` to build the main operator controller container.
-
-Run `make authenticator-build` to build the authenticator/monitor container.
-
-Run `make bundle-build` to build the OLM operator bundle container.
+- Run `make docker-build` to build the main operator controller container.
+- Run `make authenticator-build` to build the authenticator/monitor container.
+- Run `make bundle-build` to build the OLM operator bundle container.
