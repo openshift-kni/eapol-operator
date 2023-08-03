@@ -28,6 +28,7 @@ import (
 	"time"
 
 	"github.com/go-kit/log"
+	"github.com/k8snetworkplumbingwg/sriov-cni/pkg/utils"
 	"github.com/vishvananda/netlink"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -71,6 +72,7 @@ type InterfaceMonitor struct {
 	IfName         string
 	PfInfo         *trafficcontrol.PFInfo
 	IfEventHandler hostapif.LinkEventHandler
+	LinkMgr        utils.NetlinkManager
 	ifEventCh      chan netlink.LinkUpdate
 	hostApdConn    net.Conn
 	deauthRequests map[string]int64
@@ -97,7 +99,7 @@ func (m *InterfaceMonitor) StartMonitor() error {
 	m.stopWg.Add(4)
 	m.deauthRequests = make(map[string]int64)
 	m.ifEventCh = make(chan netlink.LinkUpdate)
-	pfInfo, err := trafficcontrol.GetSriovPFInfo(m.IfName)
+	pfInfo, err := trafficcontrol.GetSriovPFInfo(m.IfName, m.LinkMgr)
 	if err != nil {
 		return err
 	}
@@ -312,7 +314,7 @@ func (m *InterfaceMonitor) handleRequestsTimeout() {
 					break
 				}
 				delete(m.PfInfo.AuthenticatedAddrs, addr)
-				err := trafficcontrol.DenyTrafficFromMac(m.PfInfo, addr)
+				err := trafficcontrol.DenyTrafficFromMac(m.PfInfo, addr, m.LinkMgr)
 				if err != nil {
 					level.Error(m.Logger).Log("interface", "addr", m.IfName, addr, "error applying deny traffic", err)
 				}
@@ -342,7 +344,7 @@ func (m *InterfaceMonitor) handleAuthenticateEvent(addr string) error {
 	defer m.addrMutex.Unlock()
 	m.PfInfo.AuthenticatedAddrs[addr] = nil
 	delete(m.deauthRequests, addr)
-	return trafficcontrol.AllowTrafficFromMac(m.PfInfo, addr)
+	return trafficcontrol.AllowTrafficFromMac(m.PfInfo, addr, m.LinkMgr)
 }
 
 func (m *InterfaceMonitor) handleDeAuthenticateEvent(addr string) error {
@@ -350,7 +352,7 @@ func (m *InterfaceMonitor) handleDeAuthenticateEvent(addr string) error {
 	defer m.addrMutex.Unlock()
 	delete(m.PfInfo.AuthenticatedAddrs, addr)
 	delete(m.deauthRequests, addr)
-	return trafficcontrol.DenyTrafficFromMac(m.PfInfo, addr)
+	return trafficcontrol.DenyTrafficFromMac(m.PfInfo, addr, m.LinkMgr)
 }
 
 func (m *InterfaceMonitor) updateInterfaceStatus() error {
