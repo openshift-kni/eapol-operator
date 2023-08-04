@@ -52,8 +52,8 @@ var _ = Describe("Sriov", func() {
 			mocked := &mocks_utils.NetlinkManager{}
 			pfInfo := PFInfo{Name: pfName, Authenticated: false,
 				VFs: map[int]*VFInfo{0: {Index: 0, Vlan: 200,
-					Parent: &PFInfo{Name: pfName, nLinkMgr: mocked}}},
-				nLinkMgr: mocked}
+					Parent: &PFInfo{Name: pfName, NetLinkMgr: mocked}}},
+				NetLinkMgr: mocked}
 			fakeLink := &utils.FakeLink{LinkAttrs: netlink.LinkAttrs{
 				Index:        1000,
 				Name:         pfName,
@@ -74,8 +74,8 @@ var _ = Describe("Sriov", func() {
 			mocked := &mocks_utils.NetlinkManager{}
 			pfInfo := PFInfo{Name: pfName, Authenticated: true,
 				VFs: map[int]*VFInfo{0: {Index: 0, Vlan: 200,
-					Parent: &PFInfo{Name: pfName, Authenticated: true, nLinkMgr: mocked}}},
-				nLinkMgr: mocked}
+					Parent: &PFInfo{Name: pfName, Authenticated: true, NetLinkMgr: mocked}}},
+				NetLinkMgr: mocked}
 			fakeLink := &utils.FakeLink{LinkAttrs: netlink.LinkAttrs{
 				Index:        1000,
 				Name:         pfName,
@@ -96,12 +96,12 @@ var _ = Describe("Sriov", func() {
 			mocked := &mocks_utils.NetlinkManager{}
 			pfInfo := PFInfo{Name: pfName, Authenticated: true,
 				VFs: map[int]*VFInfo{0: {Index: 0, Vlan: 200,
-					Parent: &PFInfo{Name: pfName, Authenticated: true, nLinkMgr: mocked}},
+					Parent: &PFInfo{Name: pfName, Authenticated: true, NetLinkMgr: mocked}},
 					1: {Index: 1, Vlan: 200,
-						Parent: &PFInfo{Name: pfName, Authenticated: true, nLinkMgr: mocked}},
+						Parent: &PFInfo{Name: pfName, Authenticated: true, NetLinkMgr: mocked}},
 					2: {Index: 2, Vlan: 200,
-						Parent: &PFInfo{Name: pfName, Authenticated: true, nLinkMgr: mocked}}},
-				nLinkMgr: mocked}
+						Parent: &PFInfo{Name: pfName, Authenticated: true, NetLinkMgr: mocked}}},
+				NetLinkMgr: mocked}
 			fakeLink := &utils.FakeLink{LinkAttrs: netlink.LinkAttrs{
 				Index:        1000,
 				Name:         pfName,

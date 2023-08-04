@@ -52,14 +52,14 @@ const (
 	statusCommand         = "STATUS"
 	deauthenticateCommand = "DEAUTHENTICATE"
 	unixDgramProtocol     = "unixgram"
-	hostapdSocketDir      = "/var/run/hostapd/"
 	sockReadBufSize       = 4096
 )
 
 var (
-	statusReply     = "state="
-	solicitedEvents = []string{"PONG\n", "OK\n", statusReply}
-	requestTimeout  = int(2 * time.Second / time.Microsecond)
+	hostapdSocketDir = "/var/run/hostapd/"
+	statusReply      = "state="
+	solicitedEvents  = []string{"PONG\n", "OK\n", statusReply}
+	requestTimeout   = int(2 * time.Second / time.Microsecond)
 )
 
 type Opts func(intfMonitor *InterfaceMonitor)
@@ -356,6 +356,9 @@ func (m *InterfaceMonitor) handleDeAuthenticateEvent(addr string) error {
 }
 
 func (m *InterfaceMonitor) updateInterfaceStatus() error {
+	if m.Client == nil {
+		return nil
+	}
 	m.addrMutex.Lock()
 	defer m.addrMutex.Unlock()
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -384,6 +387,9 @@ func (m *InterfaceMonitor) updateInterfaceStatus() error {
 }
 
 func (m *InterfaceMonitor) logEvent(eventType, messageFmt string, args ...interface{}) {
+	if m.Client == nil {
+		return
+	}
 	authObj, err := m.getAuthObject()
 	if err != nil {
 		level.Error(m.Logger).Log("record-event", "error recording event", m.IfName, err)

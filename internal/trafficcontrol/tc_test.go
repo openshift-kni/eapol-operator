@@ -49,8 +49,8 @@ var _ = Describe("tc", func() {
 			mocked := &mocks_utils.NetlinkManager{}
 			pfInfo := &PFInfo{Name: pfName, Authenticated: true, AuthenticatedAddrs: map[string]interface{}{"6e:16:06:0e:b7:e2": nil},
 				VFs: map[int]*VFInfo{0: {Index: 0, Vlan: 200,
-					Parent: &PFInfo{Name: pfName, Authenticated: true, nLinkMgr: mocked}}},
-				nLinkMgr: mocked}
+					Parent: &PFInfo{Name: pfName, Authenticated: true, NetLinkMgr: mocked}}},
+				NetLinkMgr: mocked}
 			fakeLink := &utils.FakeLink{LinkAttrs: netlink.LinkAttrs{
 				Index:        1000,
 				Name:         pfName,
@@ -74,8 +74,8 @@ var _ = Describe("tc", func() {
 			mocked := &mocks_utils.NetlinkManager{}
 			pfInfo := &PFInfo{Name: pfName, Authenticated: true,
 				VFs: map[int]*VFInfo{0: {Index: 0, Vlan: 200,
-					Parent: &PFInfo{Name: pfName, Authenticated: false, nLinkMgr: mocked}}},
-				nLinkMgr: mocked}
+					Parent: &PFInfo{Name: pfName, Authenticated: false, NetLinkMgr: mocked}}},
+				NetLinkMgr: mocked}
 			fakeLink := &utils.FakeLink{LinkAttrs: netlink.LinkAttrs{
 				Index:        1000,
 				Name:         pfName,

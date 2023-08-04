@@ -37,7 +37,7 @@ type PFInfo struct {
 	Authenticated      bool
 	AuthenticatedAddrs map[string]interface{}
 	VFs                map[int]*VFInfo
-	nLinkMgr           utils.NetlinkManager
+	NetLinkMgr         utils.NetlinkManager
 }
 
 type VFInfo struct {
@@ -47,7 +47,7 @@ type VFInfo struct {
 }
 
 func (pf *PFInfo) HandlePfEventForVlanChange(logger log.Logger) error {
-	pfLink, err := pf.nLinkMgr.LinkByName(pf.Name)
+	pfLink, err := pf.NetLinkMgr.LinkByName(pf.Name)
 	if err != nil {
 		return err
 	}
@@ -76,7 +76,7 @@ func (pf *PFInfo) ConfigureVlanStateForVFs() error {
 }
 
 func (vf *VFInfo) ConfigureVlanState() error {
-	pfLink, err := vf.Parent.nLinkMgr.LinkByName(vf.Parent.Name)
+	pfLink, err := vf.Parent.NetLinkMgr.LinkByName(vf.Parent.Name)
 	if err != nil {
 		return err
 	}
@@ -92,11 +92,11 @@ func (vf *VFInfo) ConfigureVlanState() error {
 		state = netlink.VF_LINK_STATE_AUTO
 		vlan = vf.Vlan
 	}
-	err = vf.Parent.nLinkMgr.LinkSetVfVlan(pfLink, vf.Index, vlan)
+	err = vf.Parent.NetLinkMgr.LinkSetVfVlan(pfLink, vf.Index, vlan)
 	if err != nil {
 		return err
 	}
-	return vf.Parent.nLinkMgr.LinkSetVfState(pfLink, vf.Index, state)
+	return vf.Parent.NetLinkMgr.LinkSetVfState(pfLink, vf.Index, state)
 }
 
 func GetSriovPFInfo(ifName string, nLinkMgr utils.NetlinkManager) (*PFInfo, error) {
@@ -105,7 +105,7 @@ func GetSriovPFInfo(ifName string, nLinkMgr utils.NetlinkManager) (*PFInfo, erro
 		return nil, err
 	}
 	pf := &PFInfo{Name: ifName, Authenticated: false, VFs: map[int]*VFInfo{},
-		AuthenticatedAddrs: make(map[string]interface{}), nLinkMgr: nLinkMgr}
+		AuthenticatedAddrs: make(map[string]interface{}), NetLinkMgr: nLinkMgr}
 	for _, vf := range pfLink.Attrs().Vfs {
 		pf.VFs[vf.ID] = &VFInfo{Parent: pf, Index: vf.ID, Vlan: vf.Vlan}
 	}
