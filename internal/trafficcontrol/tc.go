@@ -23,6 +23,7 @@ import (
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
+	"github.com/k8snetworkplumbingwg/sriov-cni/pkg/utils"
 )
 
 var (
@@ -31,7 +32,7 @@ var (
 	udpProtoStr = "udp"
 )
 
-func AllowTrafficFromMac(pf *PFInfo, macAddress string) error {
+func AllowTrafficFromMac(pf *PFInfo, macAddress string, nLinkMgr utils.NetlinkManager) error {
 	// Restore the original vlan and state on the VF when first client
 	// gets authenticated.
 	if len(pf.AuthenticatedAddrs) == 1 {
@@ -44,7 +45,7 @@ func AllowTrafficFromMac(pf *PFInfo, macAddress string) error {
 	if _, err := exec.LookPath("tc"); err != nil {
 		return err
 	}
-	interfaces, err := GetAssociatedInterfaces(pf.Name)
+	interfaces, err := GetAssociatedInterfaces(pf.Name, nLinkMgr)
 	if err != nil {
 		return err
 	}
@@ -58,7 +59,7 @@ func AllowTrafficFromMac(pf *PFInfo, macAddress string) error {
 	return nil
 }
 
-func DenyTrafficFromMac(pf *PFInfo, macAddress string) error {
+func DenyTrafficFromMac(pf *PFInfo, macAddress string, nLinkMgr utils.NetlinkManager) error {
 	// When no clients authenticated on PF, then move its VFs into
 	// deauthenticated state.
 	if len(pf.AuthenticatedAddrs) == 0 {
@@ -71,7 +72,7 @@ func DenyTrafficFromMac(pf *PFInfo, macAddress string) error {
 	if _, err := exec.LookPath("tc"); err != nil {
 		return err
 	}
-	interfaces, err := GetAssociatedInterfaces(pf.Name)
+	interfaces, err := GetAssociatedInterfaces(pf.Name, nLinkMgr)
 	if err != nil {
 		return err
 	}

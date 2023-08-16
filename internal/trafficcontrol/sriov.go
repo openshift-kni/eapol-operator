@@ -24,6 +24,7 @@ import (
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
+	"github.com/k8snetworkplumbingwg/sriov-cni/pkg/utils"
 	"github.com/vishvananda/netlink"
 )
 
@@ -36,6 +37,7 @@ type PFInfo struct {
 	Authenticated      bool
 	AuthenticatedAddrs map[string]interface{}
 	VFs                map[int]*VFInfo
+	NetLinkMgr         utils.NetlinkManager
 }
 
 type VFInfo struct {
@@ -45,7 +47,7 @@ type VFInfo struct {
 }
 
 func (pf *PFInfo) HandlePfEventForVlanChange(logger log.Logger) error {
-	pfLink, err := netlink.LinkByName(pf.Name)
+	pfLink, err := pf.NetLinkMgr.LinkByName(pf.Name)
 	if err != nil {
 		return err
 	}
@@ -74,7 +76,7 @@ func (pf *PFInfo) ConfigureVlanStateForVFs() error {
 }
 
 func (vf *VFInfo) ConfigureVlanState() error {
-	pfLink, err := netlink.LinkByName(vf.Parent.Name)
+	pfLink, err := vf.Parent.NetLinkMgr.LinkByName(vf.Parent.Name)
 	if err != nil {
 		return err
 	}
@@ -90,27 +92,27 @@ func (vf *VFInfo) ConfigureVlanState() error {
 		state = netlink.VF_LINK_STATE_AUTO
 		vlan = vf.Vlan
 	}
-	err = netlink.LinkSetVfVlan(pfLink, vf.Index, vlan)
+	err = vf.Parent.NetLinkMgr.LinkSetVfVlan(pfLink, vf.Index, vlan)
 	if err != nil {
 		return err
 	}
-	return netlink.LinkSetVfState(pfLink, vf.Index, state)
+	return vf.Parent.NetLinkMgr.LinkSetVfState(pfLink, vf.Index, state)
 }
 
-func GetSriovPFInfo(ifName string) (*PFInfo, error) {
-	pfLink, err := netlink.LinkByName(ifName)
+func GetSriovPFInfo(ifName string, nLinkMgr utils.NetlinkManager) (*PFInfo, error) {
+	pfLink, err := nLinkMgr.LinkByName(ifName)
 	if err != nil {
 		return nil, err
 	}
 	pf := &PFInfo{Name: ifName, Authenticated: false, VFs: map[int]*VFInfo{},
-		AuthenticatedAddrs: make(map[string]interface{})}
+		AuthenticatedAddrs: make(map[string]interface{}), NetLinkMgr: nLinkMgr}
 	for _, vf := range pfLink.Attrs().Vfs {
 		pf.VFs[vf.ID] = &VFInfo{Parent: pf, Index: vf.ID, Vlan: vf.Vlan}
 	}
 	return pf, nil
 }
 
-func GetSriovVFs(ifName string) ([]string, error) {
+func GetSriovVFs(ifName string, nLinkMgr utils.NetlinkManager) ([]string, error) {
 	vfNames := []string{}
 	if !IsSriovPF(ifName) {
 		return nil, fmt.Errorf("interface %s is not a sriov pf type", ifName)
@@ -135,7 +137,7 @@ func GetSriovVFs(ifName string) ([]string, error) {
 			continue
 		}
 		vfIfName := vfNetDirInfo[0].Name()
-		vfLink, err := netlink.LinkByName(vfIfName)
+		vfLink, err := nLinkMgr.LinkByName(vfIfName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get netlink %s: %q", vfIfName, err)
 		}
@@ -152,10 +154,10 @@ func IsSriovPF(ifName string) bool {
 	return true
 }
 
-func GetAssociatedInterfaces(ifName string) ([]string, error) {
+func GetAssociatedInterfaces(ifName string, nLinkMgr utils.NetlinkManager) ([]string, error) {
 	interfaces := []string{ifName}
 	if IsSriovPF(ifName) {
-		vfs, err := GetSriovVFs(ifName)
+		vfs, err := GetSriovVFs(ifName, nLinkMgr)
 		if err != nil {
 			return nil, err
 		}

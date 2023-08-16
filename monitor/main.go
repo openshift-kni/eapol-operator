@@ -32,6 +32,7 @@ import (
 
 	"github.com/go-kit/log"
 	"github.com/go-kit/log/level"
+	"github.com/k8snetworkplumbingwg/sriov-cni/pkg/utils"
 	"github.com/openshift-kni/eapol-operator/internal/k8s"
 	"github.com/openshift-kni/eapol-operator/internal/logging"
 	"github.com/openshift-kni/eapol-operator/internal/trafficcontrol"
@@ -110,7 +111,8 @@ func main() {
 		}
 	}()
 
-	err = initInterfaces(logger, ifaces, allowedTcpPorts, allowedUdpPorts)
+	nLinkMgr := &utils.MyNetlink{}
+	err = initInterfaces(logger, ifaces, allowedTcpPorts, allowedUdpPorts, nLinkMgr)
 	if err != nil {
 		level.Error(logger).Log("op", "startup", "init", "interface", "error", err)
 		os.Exit(1)
@@ -127,6 +129,7 @@ func main() {
 			intfMonitor.AuthNsName = authObjKey
 			intfMonitor.IfEventHandler = ifEventHandler
 			intfMonitor.Recorder = eventRecorder
+			intfMonitor.LinkMgr = nLinkMgr
 		})
 		err = intfMonitor.StartMonitor()
 		if err != nil {
@@ -149,7 +152,7 @@ func main() {
 	}
 	ifEventHandler.StopHandler()
 
-	err = resetInterfaces(logger, ifaces)
+	err = resetInterfaces(logger, ifaces, nLinkMgr)
 	if err != nil {
 		level.Error(logger).Log("op", "shutdown", "reset", "interfaces", "error", err)
 	}
@@ -157,12 +160,12 @@ func main() {
 	level.Info(logger).Log("op", "shutdown", "msg", "done")
 }
 
-func initInterfaces(logger log.Logger, interfaces []string, unprotectedTcpPorts, unprotectedUdpPorts []int) error {
+func initInterfaces(logger log.Logger, interfaces []string, unprotectedTcpPorts, unprotectedUdpPorts []int, nLinkMgr utils.NetlinkManager) error {
 	if interfaces == nil {
 		return nil
 	}
 	for _, iface := range interfaces {
-		pfvfs, err := trafficcontrol.GetAssociatedInterfaces(iface)
+		pfvfs, err := trafficcontrol.GetAssociatedInterfaces(iface, nLinkMgr)
 		level.Info(logger).Log("op", "initInterfaces", "pfvfs", pfvfs)
 		if err != nil {
 			return err
@@ -195,12 +198,12 @@ func registerPromHandler(host string, port int, enablePprof bool) error {
 	return server.ListenAndServe()
 }
 
-func resetInterfaces(logger log.Logger, interfaces []string) error {
+func resetInterfaces(logger log.Logger, interfaces []string, nLinkMgr utils.NetlinkManager) error {
 	if interfaces == nil {
 		return nil
 	}
 	for _, iface := range interfaces {
-		pfvfs, err := trafficcontrol.GetAssociatedInterfaces(iface)
+		pfvfs, err := trafficcontrol.GetAssociatedInterfaces(iface, nLinkMgr)
 		if err != nil {
 			return err
 		}
